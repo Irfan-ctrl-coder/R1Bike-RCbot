@@ -23,7 +23,6 @@ async function handleIncomingMessage(wa_id, messageText, buttonReplyId) {
       } else if (buttonReplyId === 'lang_english') {
         state.language = 'English';
       } else {
-        // User typed something instead of tapping a button
         await sendButtonMessage(wa_id, 'Please select a valid option:', [
           { id: 'lang_kannada', title: 'Kannada' },
           { id: 'lang_english', title: 'English' }
@@ -68,7 +67,8 @@ async function handleIncomingMessage(wa_id, messageText, buttonReplyId) {
       break;
 
     case 'DONE':
-      await sendTextMessage(wa_id, `Your token ${state.token} is already in queue. We'll reach you shortly.`);
+      // Bot goes fully silent from here — human takes over manually in WhatsApp
+      console.log(`User ${wa_id} already has token ${state.token}. No auto-reply sent (manual takeover mode).`);
       break;
   }
 }
