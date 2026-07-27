@@ -1,5 +1,6 @@
 const { sendTextMessage, sendButtonMessage } = require('../services/whatsapp');
 const { generateToken } = require('./tokenGenerator');
+const { logOrder } = require('../services/sheets');
 
 const userStates = {}; // wa_id -> { step, language, service, number, token }
 
@@ -86,6 +87,14 @@ async function handleIncomingMessage(wa_id, messageText, buttonReplyId) {
       state.number = messageText.trim().toUpperCase();
       state.token = generateToken();
       state.step = 'DONE';
+
+      await logOrder({
+        token: state.token,
+        wa_id: wa_id,
+        language: state.language,
+        service: state.service,
+        number: state.number
+      });
 
       await sendTextMessage(wa_id, t.tokenMessage(state.token));
       break;
