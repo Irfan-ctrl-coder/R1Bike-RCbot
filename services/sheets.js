@@ -1,13 +1,11 @@
 const { GoogleSpreadsheet } = require('google-spreadsheet');
 const { JWT } = require('google-auth-library');
-const path = require('path');
 
 const SHEET_ID = process.env.SHEET_ID;
-const credentials = require(path.join(__dirname, '..', 'credentials', 'r1-bikes-3bc46d70fe96.json'));
 
 const serviceAccountAuth = new JWT({
-  email: credentials.client_email,
-  key: credentials.private_key,
+  email: process.env.GOOGLE_CLIENT_EMAIL,
+  key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
