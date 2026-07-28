@@ -85,7 +85,7 @@ async function handleIncomingMessage(wa_id, messageText, buttonReplyId) {
         return;
       }
       state.number = messageText.trim().toUpperCase();
-      state.token = generateToken();
+      state.token = await generateToken();
       state.step = 'DONE';
 
       await logOrder({
