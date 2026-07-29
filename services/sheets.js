@@ -21,6 +21,7 @@ async function logOrder(data) {
       Language: data.language,
       Service: data.service,
       Number: data.number,
+      DOB: data.dob || '',
       Status: 'Waiting for you',
       Timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
     });

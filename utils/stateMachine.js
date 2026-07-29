@@ -2,7 +2,7 @@ const { sendTextMessage, sendButtonMessage } = require('../services/whatsapp');
 const { generateToken } = require('./tokenGenerator');
 const { logOrder } = require('../services/sheets');
 
-const userStates = {}; // wa_id -> { step, language, service, number, token }
+const userStates = {}; // wa_id -> { step, language, service, number, dob, token }
 
 const messages = {
   Kannada: {
@@ -11,6 +11,8 @@ const messages = {
     serviceDL: 'ಡಿಎಲ್',
     enterNumber: (service) => `ದಯವಿಟ್ಟು ನಿಮ್ಮ ${service === 'RC' ? 'ವಾಹನ' : 'ಡಿಎಲ್'} ಸಂಖ್ಯೆಯನ್ನು ನಮೂದಿಸಿ:`,
     invalidNumber: 'ದಯವಿಟ್ಟು ಮಾನ್ಯ ಸಂಖ್ಯೆಯನ್ನು ನಮೂದಿಸಿ.',
+    enterDob: 'ದಯವಿಟ್ಟು ನಿಮ್ಮ ಜನ್ಮ ದಿನಾಂಕವನ್ನು ನಮೂದಿಸಿ (DD/MM/YYYY):',
+    invalidDob: 'ದಯವಿಟ್ಟು ಮಾನ್ಯ ಜನ್ಮ ದಿನಾಂಕವನ್ನು ನಮೂದಿಸಿ (DD/MM/YYYY):',
     tokenMessage: (token) => `ನಿಮ್ಮ ಟೋಕನ್ ${token}. ದಯವಿಟ್ಟು ಕಾಯಿರಿ, ನಾವು ಶೀಘ್ರದಲ್ಲೇ ಖಚಿತಪಡಿಸುತ್ತೇವೆ.`,
     invalidOption: 'ದಯವಿಟ್ಟು ಮಾನ್ಯ ಆಯ್ಕೆಯನ್ನು ಆರಿಸಿ:'
   },
@@ -20,13 +22,19 @@ const messages = {
     serviceDL: 'Driving License',
     enterNumber: (service) => `Please enter your ${service === 'RC' ? 'Vehicle' : 'DL'} number:`,
     invalidNumber: 'Please enter a valid number.',
+    enterDob: 'Please enter your Date of Birth (DD/MM/YYYY):',
+    invalidDob: 'Please enter a valid Date of Birth (DD/MM/YYYY):',
     tokenMessage: (token) => `Your token is ${token}. Please wait, we'll confirm shortly.`,
     invalidOption: 'Please select a valid option:'
   }
 };
 
+function isValidDob(text) {
+  const regex = /^\d{2}\/\d{2}\/\d{4}$/;
+  return regex.test(text.trim());
+}
+
 async function handleIncomingMessage(wa_id, messageText, buttonReplyId) {
-  // Brand new user — start the flow
   if (!userStates[wa_id]) {
     userStates[wa_id] = { step: 'LANG_SELECT' };
     await sendButtonMessage(wa_id, 'Welcome! Please select your language / ದಯವಿಟ್ಟು ಭಾಷೆಯನ್ನು ಆಯ್ಕೆಮಾಡಿ:', [
@@ -85,6 +93,35 @@ async function handleIncomingMessage(wa_id, messageText, buttonReplyId) {
         return;
       }
       state.number = messageText.trim().toUpperCase();
+
+      if (state.service === 'DL') {
+        state.step = 'AWAITING_DOB';
+        await sendTextMessage(wa_id, t.enterDob);
+      } else {
+        state.token = await generateToken();
+        state.step = 'DONE';
+
+        await logOrder({
+          token: state.token,
+          wa_id: wa_id,
+          language: state.language,
+          service: state.service,
+          number: state.number,
+          dob: ''
+        });
+
+        await sendTextMessage(wa_id, t.tokenMessage(state.token));
+      }
+      break;
+    }
+
+    case 'AWAITING_DOB': {
+      const t = messages[state.language];
+      if (!messageText || !isValidDob(messageText)) {
+        await sendTextMessage(wa_id, t.invalidDob);
+        return;
+      }
+      state.dob = messageText.trim();
       state.token = await generateToken();
       state.step = 'DONE';
 
@@ -93,7 +130,8 @@ async function handleIncomingMessage(wa_id, messageText, buttonReplyId) {
         wa_id: wa_id,
         language: state.language,
         service: state.service,
-        number: state.number
+        number: state.number,
+        dob: state.dob
       });
 
       await sendTextMessage(wa_id, t.tokenMessage(state.token));
@@ -101,7 +139,6 @@ async function handleIncomingMessage(wa_id, messageText, buttonReplyId) {
     }
 
     case 'DONE':
-      // Bot goes fully silent — human takes over manually in WhatsApp
       console.log(`User ${wa_id} already has token ${state.token}. No auto-reply sent (manual takeover mode).`);
       break;
   }
