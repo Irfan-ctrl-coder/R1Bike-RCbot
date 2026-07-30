@@ -13,7 +13,6 @@ function getTodayDateString() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
 
-// Returns { token, peopleAhead }
 async function generateToken() {
   try {
     const doc = new GoogleSpreadsheet(SHEET_ID, serviceAccountAuth);

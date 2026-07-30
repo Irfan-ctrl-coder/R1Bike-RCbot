@@ -25,6 +25,7 @@ async function logOrder(data) {
       Language: data.language,
       Service: data.service,
       Number: data.number,
+      VehicleType: data.vehicleType || '',
       DOB: data.dob || '',
       Status: 'Waiting for you',
       Date: getTodayDateString(),

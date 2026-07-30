@@ -11,6 +11,10 @@ const messages = {
     serviceDL: 'ಡಿಎಲ್',
     enterNumber: (service) => `ದಯವಿಟ್ಟು ನಿಮ್ಮ ${service === 'RC' ? 'ವಾಹನ' : 'ಡಿಎಲ್'} ಸಂಖ್ಯೆಯನ್ನು ನಮೂದಿಸಿ:`,
     invalidNumber: 'ದಯವಿಟ್ಟು ಮಾನ್ಯ ಸಂಖ್ಯೆಯನ್ನು ನಮೂದಿಸಿ.',
+    selectVehicleType: 'ದಯವಿಟ್ಟು ವಾಹನ ಪ್ರಕಾರವನ್ನು ಆಯ್ಕೆಮಾಡಿ:',
+    twoWheeler: 'ಎರಡು ಚಕ್ರ',
+    threeWheeler: 'ಮೂರು ಚಕ್ರ',
+    fourWheeler: 'ನಾಲ್ಕು ಚಕ್ರ',
     enterDob: 'ದಯವಿಟ್ಟು ನಿಮ್ಮ ಜನ್ಮ ದಿನಾಂಕವನ್ನು ನಮೂದಿಸಿ (DD/MM/YYYY):',
     invalidDob: 'ದಯವಿಟ್ಟು ಮಾನ್ಯ ಜನ್ಮ ದಿನಾಂಕವನ್ನು ನಮೂದಿಸಿ (DD/MM/YYYY):',
     tokenMessage: (token, peopleAhead) =>
@@ -23,6 +27,10 @@ const messages = {
     serviceDL: 'Driving License',
     enterNumber: (service) => `Please enter your ${service === 'RC' ? 'Vehicle' : 'DL'} number:`,
     invalidNumber: 'Please enter a valid number.',
+    selectVehicleType: 'Please select vehicle type:',
+    twoWheeler: 'Two Wheeler',
+    threeWheeler: 'Three Wheeler',
+    fourWheeler: 'Four Wheeler',
     enterDob: 'Please enter your Date of Birth (DD/MM/YYYY):',
     invalidDob: 'Please enter a valid Date of Birth (DD/MM/YYYY):',
     tokenMessage: (token, peopleAhead) =>
@@ -34,6 +42,24 @@ const messages = {
 function isValidDob(text) {
   const regex = /^\d{2}\/\d{2}\/\d{4}$/;
   return regex.test(text.trim());
+}
+
+async function finalizeOrder(wa_id, state, t) {
+  const { token, peopleAhead } = await generateToken();
+  state.token = token;
+  state.step = 'DONE';
+
+  await logOrder({
+    token: state.token,
+    wa_id: wa_id,
+    language: state.language,
+    service: state.service,
+    number: state.number,
+    vehicleType: state.vehicleType || '',
+    dob: state.dob || ''
+  });
+
+  await sendTextMessage(wa_id, t.tokenMessage(state.token, peopleAhead));
 }
 
 async function handleIncomingMessage(wa_id, messageText, buttonReplyId) {
@@ -96,25 +122,37 @@ async function handleIncomingMessage(wa_id, messageText, buttonReplyId) {
       }
       state.number = messageText.trim().toUpperCase();
 
-      if (state.service === 'DL') {
+      if (state.service === 'RC') {
+        state.step = 'VEHICLE_TYPE_SELECT';
+        await sendButtonMessage(wa_id, t.selectVehicleType, [
+          { id: 'vehicle_two', title: t.twoWheeler },
+          { id: 'vehicle_three', title: t.threeWheeler },
+          { id: 'vehicle_four', title: t.fourWheeler }
+        ]);
+      } else {
         state.step = 'AWAITING_DOB';
         await sendTextMessage(wa_id, t.enterDob);
-      } else {
-        const { token, peopleAhead } = await generateToken();
-        state.token = token;
-        state.step = 'DONE';
-
-        await logOrder({
-          token: state.token,
-          wa_id: wa_id,
-          language: state.language,
-          service: state.service,
-          number: state.number,
-          dob: ''
-        });
-
-        await sendTextMessage(wa_id, t.tokenMessage(state.token, peopleAhead));
       }
+      break;
+    }
+
+    case 'VEHICLE_TYPE_SELECT': {
+      const t = messages[state.language];
+      if (buttonReplyId === 'vehicle_two') {
+        state.vehicleType = 'Two Wheeler';
+      } else if (buttonReplyId === 'vehicle_three') {
+        state.vehicleType = 'Three Wheeler';
+      } else if (buttonReplyId === 'vehicle_four') {
+        state.vehicleType = 'Four Wheeler';
+      } else {
+        await sendButtonMessage(wa_id, t.invalidOption, [
+          { id: 'vehicle_two', title: t.twoWheeler },
+          { id: 'vehicle_three', title: t.threeWheeler },
+          { id: 'vehicle_four', title: t.fourWheeler }
+        ]);
+        return;
+      }
+      await finalizeOrder(wa_id, state, t);
       break;
     }
 
@@ -125,20 +163,7 @@ async function handleIncomingMessage(wa_id, messageText, buttonReplyId) {
         return;
       }
       state.dob = messageText.trim();
-      const { token, peopleAhead } = await generateToken();
-      state.token = token;
-      state.step = 'DONE';
-
-      await logOrder({
-        token: state.token,
-        wa_id: wa_id,
-        language: state.language,
-        service: state.service,
-        number: state.number,
-        dob: state.dob
-      });
-
-      await sendTextMessage(wa_id, t.tokenMessage(state.token, peopleAhead));
+      await finalizeOrder(wa_id, state, t);
       break;
     }
 
