@@ -9,6 +9,10 @@ const serviceAccountAuth = new JWT({
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
+function getTodayDateString() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
 async function logOrder(data) {
   try {
     const doc = new GoogleSpreadsheet(SHEET_ID, serviceAccountAuth);
@@ -23,6 +27,7 @@ async function logOrder(data) {
       Number: data.number,
       DOB: data.dob || '',
       Status: 'Waiting for you',
+      Date: getTodayDateString(),
       Timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
     });
 

@@ -2,7 +2,7 @@ const { sendTextMessage, sendButtonMessage } = require('../services/whatsapp');
 const { generateToken } = require('./tokenGenerator');
 const { logOrder } = require('../services/sheets');
 
-const userStates = {}; // wa_id -> { step, language, service, number, dob, token }
+const userStates = {};
 
 const messages = {
   Kannada: {
@@ -13,7 +13,8 @@ const messages = {
     invalidNumber: 'ದಯವಿಟ್ಟು ಮಾನ್ಯ ಸಂಖ್ಯೆಯನ್ನು ನಮೂದಿಸಿ.',
     enterDob: 'ದಯವಿಟ್ಟು ನಿಮ್ಮ ಜನ್ಮ ದಿನಾಂಕವನ್ನು ನಮೂದಿಸಿ (DD/MM/YYYY):',
     invalidDob: 'ದಯವಿಟ್ಟು ಮಾನ್ಯ ಜನ್ಮ ದಿನಾಂಕವನ್ನು ನಮೂದಿಸಿ (DD/MM/YYYY):',
-    tokenMessage: (token) => `ನಿಮ್ಮ ಟೋಕನ್ ${token}. ದಯವಿಟ್ಟು ಕಾಯಿರಿ, ನಾವು ಶೀಘ್ರದಲ್ಲೇ ಖಚಿತಪಡಿಸುತ್ತೇವೆ.`,
+    tokenMessage: (token, peopleAhead) =>
+      `ನಿಮಗಿಂತ ಮೊದಲು ${peopleAhead} ಜನರು ಕಾಯುತ್ತಿದ್ದಾರೆ. ನಿಮ್ಮ ಸರದಿ ಬಂದ ನಂತರ ನಿಮಗೆ ಸೇವೆ ನೀಡಲಾಗುವುದು. ನಿಮ್ಮ ಟೋಕನ್ ಸಂಖ್ಯೆ ${token}. ದಯವಿಟ್ಟು ತಾಳ್ಮೆಯಿಂದ ಕಾಯಿರಿ.`,
     invalidOption: 'ದಯವಿಟ್ಟು ಮಾನ್ಯ ಆಯ್ಕೆಯನ್ನು ಆರಿಸಿ:'
   },
   English: {
@@ -24,7 +25,8 @@ const messages = {
     invalidNumber: 'Please enter a valid number.',
     enterDob: 'Please enter your Date of Birth (DD/MM/YYYY):',
     invalidDob: 'Please enter a valid Date of Birth (DD/MM/YYYY):',
-    tokenMessage: (token) => `Your token is ${token}. Please wait, we'll confirm shortly.`,
+    tokenMessage: (token, peopleAhead) =>
+      `There are ${peopleAhead} people ahead of you in the queue. Once your turn comes, we'll provide your service. Your token number is ${token}. Please wait patiently, we'll reach out soon.`,
     invalidOption: 'Please select a valid option:'
   }
 };
@@ -98,7 +100,8 @@ async function handleIncomingMessage(wa_id, messageText, buttonReplyId) {
         state.step = 'AWAITING_DOB';
         await sendTextMessage(wa_id, t.enterDob);
       } else {
-        state.token = await generateToken();
+        const { token, peopleAhead } = await generateToken();
+        state.token = token;
         state.step = 'DONE';
 
         await logOrder({
@@ -110,7 +113,7 @@ async function handleIncomingMessage(wa_id, messageText, buttonReplyId) {
           dob: ''
         });
 
-        await sendTextMessage(wa_id, t.tokenMessage(state.token));
+        await sendTextMessage(wa_id, t.tokenMessage(state.token, peopleAhead));
       }
       break;
     }
@@ -122,7 +125,8 @@ async function handleIncomingMessage(wa_id, messageText, buttonReplyId) {
         return;
       }
       state.dob = messageText.trim();
-      state.token = await generateToken();
+      const { token, peopleAhead } = await generateToken();
+      state.token = token;
       state.step = 'DONE';
 
       await logOrder({
@@ -134,7 +138,7 @@ async function handleIncomingMessage(wa_id, messageText, buttonReplyId) {
         dob: state.dob
       });
 
-      await sendTextMessage(wa_id, t.tokenMessage(state.token));
+      await sendTextMessage(wa_id, t.tokenMessage(state.token, peopleAhead));
       break;
     }
 

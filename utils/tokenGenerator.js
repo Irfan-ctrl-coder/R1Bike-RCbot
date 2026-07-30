@@ -9,27 +9,30 @@ const serviceAccountAuth = new JWT({
   scopes: ['https://www.googleapis.com/auth/spreadsheets'],
 });
 
-let counter = null; // will be set on first use by checking the sheet
+function getTodayDateString() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
 
-async function initCounter() {
-  if (counter !== null) return; // already initialized
+// Returns { token, peopleAhead }
+async function generateToken() {
   try {
     const doc = new GoogleSpreadsheet(SHEET_ID, serviceAccountAuth);
     await doc.loadInfo();
     const sheet = doc.sheetsByIndex[0];
     const rows = await sheet.getRows();
-    counter = rows.length + 1;
-  } catch (err) {
-    console.error('Error initializing token counter:', err.message);
-    counter = 1; // fallback
-  }
-}
 
-async function generateToken() {
-  await initCounter();
-  const token = `JFT-${String(counter).padStart(4, '0')}`;
-  counter++;
-  return token;
+    const today = getTodayDateString();
+    const todaysRows = rows.filter(row => row.get('Date') === today);
+
+    const peopleAhead = todaysRows.length;
+    const tokenNumber = peopleAhead + 1;
+    const token = `JFT-${String(tokenNumber).padStart(4, '0')}`;
+
+    return { token, peopleAhead };
+  } catch (err) {
+    console.error('Error generating token:', err.message);
+    return { token: `JFT-0001`, peopleAhead: 0 };
+  }
 }
 
 module.exports = { generateToken };
