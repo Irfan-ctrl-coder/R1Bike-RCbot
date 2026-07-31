@@ -35,13 +35,16 @@ router.post('/admin/send-text', checkAuth, async (req, res) => {
     
     await sendTextMessage(to, message);
 
-    saveMessage(to, {
+    const savedMsg = {
       id: 'admin_' + Date.now(),
       sender: 'admin',
       type: 'text',
       content: message,
       timestamp: new Date().toISOString()
-    });
+    };
+
+    saveMessage(to, savedMsg);
+    req.io.emit('new_message', { wa_id: to, message: savedMsg });
 
     res.json({ success: true });
   } catch (err) {
@@ -57,75 +60,52 @@ router.post('/admin/send-file', checkAuth, upload.single('file'), async (req, re
 
     const isImage = file.mimetype.startsWith('image/');
     const isAudio = file.mimetype.startsWith('audio/') || isLiveVoice === 'true';
-    
     let type = 'document';
+    let cloudUrl = '';
 
     if (isAudio) {
       let convertedBuffer = file.buffer;
-
       try {
         convertedBuffer = await convertToOggOpus(file.buffer);
       } catch (convErr) {
-        console.error('FFmpeg conversion failed, using raw buffer:', convErr.message);
+        console.error('FFmpeg conversion failed:', convErr.message);
       }
 
       const mediaId = await uploadMedia(convertedBuffer, 'audio/ogg; codecs=opus');
-      
       try {
         await sendAudioMessage(to, mediaId);
         type = 'audio';
       } catch (audioErr) {
-        console.warn('Native audio send failed, delivering fallback document:', audioErr.message);
         await sendDocumentMessage(to, mediaId, 'Voice_Note.opus');
       }
 
-      const cloudUrl = await uploadToCloudinary(convertedBuffer, 'video');
-
-      saveMessage(to, {
-        id: 'admin_' + Date.now(),
-        sender: 'admin',
-        type: type,
-        content: cloudUrl,
-        caption: caption || '',
-        filename: file.originalname,
-        timestamp: new Date().toISOString()
-      });
-
-      return res.json({ success: true });
+      cloudUrl = await uploadToCloudinary(convertedBuffer, 'video');
     } else if (isImage) {
       const mediaId = await uploadMedia(file.buffer, file.mimetype);
       await sendImageMessage(to, mediaId, caption || '');
       type = 'image';
-      
-      const cloudUrl = await uploadToCloudinary(file.buffer, 'image');
-      saveMessage(to, {
-        id: 'admin_' + Date.now(),
-        sender: 'admin',
-        type: type,
-        content: cloudUrl,
-        caption: caption || '',
-        filename: file.originalname,
-        timestamp: new Date().toISOString()
-      });
+      cloudUrl = await uploadToCloudinary(file.buffer, 'image');
     } else {
       const mediaId = await uploadMedia(file.buffer, file.mimetype);
       await sendDocumentMessage(to, mediaId, file.originalname);
-
-      const cloudUrl = await uploadToCloudinary(file.buffer, 'raw');
-      saveMessage(to, {
-        id: 'admin_' + Date.now(),
-        sender: 'admin',
-        type: 'document',
-        content: cloudUrl,
-        caption: caption || '',
-        filename: file.originalname,
-        timestamp: new Date().toISOString()
-      });
+      cloudUrl = await uploadToCloudinary(file.buffer, 'raw');
     }
+
+    const savedMsg = {
+      id: 'admin_' + Date.now(),
+      sender: 'admin',
+      type: type,
+      content: cloudUrl,
+      caption: caption || '',
+      filename: file.originalname,
+      timestamp: new Date().toISOString()
+    };
+
+    saveMessage(to, savedMsg);
+    req.io.emit('new_message', { wa_id: to, message: savedMsg });
 
     res.json({ success: true });
   } catch (err) {
-    console.error('Send file error:', err.response?.data || err.message);
     res.status(500).json({ error: err.message });
   }
 });
