@@ -180,6 +180,7 @@ let mediaRecorder = null;
 let audioChunks = [];
 let recInterval = null;
 let recSeconds = 0;
+let isAudioPlaying = false; // true while any voice note in the open chat is playing
 
 window.addEventListener('DOMContentLoaded', () => {
   if (ADMIN_PASSWORD) {
@@ -310,15 +311,6 @@ async function loadMessages() {
 
 function renderMessages(messages) {
   const area = document.getElementById('messageArea');
-
-  // Don't wipe the DOM while a voice note is actively playing - doing so
-  // destroys and recreates the <audio> element mid-playback every time the
-  // 3-second poll cycle runs, which is what was cutting the sound off.
-  const currentlyPlaying = area.querySelector('audio:not([paused])');
-  if (currentlyPlaying) {
-    return; // skip this render cycle, try again next poll
-  }
-
   area.innerHTML = '';
   messages.forEach(m => {
     const bubble = document.createElement('div');
@@ -356,6 +348,16 @@ function renderMessages(messages) {
     area.appendChild(bubble);
   });
   area.scrollTop = area.scrollHeight;
+
+  // Track real play/pause state on every audio element in this chat.
+  // pollUpdates() checks this flag and skips fetching entirely while true -
+  // fetching + JSON-parsing large base64 payloads every 3 seconds was
+  // blocking the main thread and stuttering/cutting off active playback.
+  area.querySelectorAll('audio').forEach(audioEl => {
+    audioEl.addEventListener('play', () => { isAudioPlaying = true; });
+    audioEl.addEventListener('pause', () => { isAudioPlaying = false; });
+    audioEl.addEventListener('ended', () => { isAudioPlaying = false; });
+  });
 }
 
 async function toggleRecording() {
@@ -483,6 +485,10 @@ function handleKeyPress(e) {
 }
 
 function pollUpdates() {
+  if (isAudioPlaying) {
+    return; // skip the whole poll cycle - no fetch, no parse, no render -
+             // while a voice note is actively playing, so it can't stutter
+  }
   if (ADMIN_PASSWORD) {
     loadConversations();
     if (activeWaId) loadMessages();
