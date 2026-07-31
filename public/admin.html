@@ -421,7 +421,8 @@ function stopAndSendRecording() {
 
     const formData = new FormData();
     formData.append('to', activeWaId);
-    formData.append('file', audioBlob, 'voicenote.opus');
+    formData.append('file', audioBlob, 'Voice_Note.opus');
+    formData.append('isLiveVoice', 'true');
 
     try {
       await fetch('/admin/send-file', {

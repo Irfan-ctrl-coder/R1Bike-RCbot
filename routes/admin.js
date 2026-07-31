@@ -51,31 +51,38 @@ router.post('/admin/send-text', checkAuth, async (req, res) => {
 
 router.post('/admin/send-file', checkAuth, upload.single('file'), async (req, res) => {
   try {
-    const { to, caption } = req.body;
+    const { to, caption, isLiveVoice } = req.body;
     const file = req.file;
     if (!to || !file) return res.status(400).json({ error: 'Missing fields' });
 
     const isImage = file.mimetype.startsWith('image/');
-    const isAudio = file.mimetype.startsWith('audio/') || file.originalname.endsWith('.opus') || file.originalname.endsWith('.ogg') || file.originalname.endsWith('.webm');
+    const isAudio = file.mimetype.startsWith('audio/') || file.originalname.endsWith('.opus') || file.originalname.endsWith('.ogg') || file.originalname.endsWith('.webm') || isLiveVoice === 'true';
     
-    let uploadMimeType = file.mimetype;
     let type = 'document';
 
     if (isAudio) {
-      uploadMimeType = 'audio/ogg';
-      const mediaId = await uploadMedia(file.buffer, uploadMimeType);
-      await sendAudioMessage(to, mediaId);
+      // Upload raw recording buffer to Meta
+      const mediaId = await uploadMedia(file.buffer, 'audio/ogg');
+      
+      try {
+        // Try native audio send first
+        await sendAudioMessage(to, mediaId);
+      } catch (audioErr) {
+        console.warn('Native audio send failed, falling back to document voice note:', audioErr.message);
+        // Guaranteed fallback: send as document voice file so WhatsApp delivers it every time
+        await sendDocumentMessage(to, mediaId, 'Voice_Note.opus');
+      }
       type = 'audio';
     } else if (isImage) {
-      const mediaId = await uploadMedia(file.buffer, uploadMimeType);
+      const mediaId = await uploadMedia(file.buffer, file.mimetype);
       await sendImageMessage(to, mediaId, caption || '');
       type = 'image';
     } else {
-      const mediaId = await uploadMedia(file.buffer, uploadMimeType);
+      const mediaId = await uploadMedia(file.buffer, file.mimetype);
       await sendDocumentMessage(to, mediaId, file.originalname);
     }
 
-    const base64Data = `data:${uploadMimeType};base64,${file.buffer.toString('base64')}`;
+    const base64Data = `data:audio/ogg;base64,${file.buffer.toString('base64')}`;
     saveMessage(to, {
       id: 'admin_' + Date.now(),
       sender: 'admin',

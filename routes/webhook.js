@@ -56,7 +56,7 @@ router.post('/webhook', async (req, res) => {
           sender: 'user',
           type: 'image',
           content: base64Data,
-          caption: message.image.caption || 'Payment Screenshot / Photo',
+          caption: message.image.caption || 'Photo',
           timestamp: new Date().toISOString()
         });
       } else if (message.type === 'document') {
@@ -70,17 +70,19 @@ router.post('/webhook', async (req, res) => {
           filename: message.document.filename || 'Document.pdf',
           timestamp: new Date().toISOString()
         });
-      } else if (message.type === 'audio') {
-        const media = await fetchMediaFromMeta(message.audio.id);
-        const mimeType = media?.mimeType?.includes('audio') ? media.mimeType : 'audio/ogg';
-        const base64Data = media ? `data:${mimeType};base64,${media.buffer.toString('base64')}` : null;
-        saveMessage(wa_id, {
-          id: message.id,
-          sender: 'user',
-          type: 'audio',
-          content: base64Data,
-          timestamp: new Date().toISOString()
-        });
+      } else if (message.type === 'audio' || message.type === 'voice') {
+        const audioId = message.audio?.id || message.voice?.id;
+        if (audioId) {
+          const media = await fetchMediaFromMeta(audioId);
+          const base64Data = media ? `data:audio/ogg;base64,${media.buffer.toString('base64')}` : null;
+          saveMessage(wa_id, {
+            id: message.id,
+            sender: 'user',
+            type: 'audio',
+            content: base64Data,
+            timestamp: new Date().toISOString()
+          });
+        }
       }
 
       await handleIncomingMessage(wa_id, messageText, buttonReplyId);
