@@ -25,6 +25,15 @@ router.post('/webhook', async (req, res) => {
     const value = change?.value;
     const message = value?.messages?.[0];
 
+    // Log delivery failure statuses if Meta drops a message
+    if (value?.statuses) {
+      value.statuses.forEach(status => {
+        if (status.status === 'failed') {
+          console.error('[DELIVERY FAILURE REASON]:', JSON.stringify(status.errors, null, 2));
+        }
+      });
+    }
+
     if (message) {
       const wa_id = message.from;
       let messageText = null;
@@ -50,7 +59,7 @@ router.post('/webhook', async (req, res) => {
         });
       } else if (message.type === 'image') {
         const media = await fetchMediaFromMeta(message.image.id);
-        const base64Data = media ? `data:${media.mimeType};base64,${media.buffer.toString('base64')}` : null;
+        const base64Data = media ? `data:${media.mimeType};base64,${Buffer.from(media.buffer).toString('base64')}` : null;
         saveMessage(wa_id, {
           id: message.id,
           sender: 'user',
@@ -61,7 +70,7 @@ router.post('/webhook', async (req, res) => {
         });
       } else if (message.type === 'document') {
         const media = await fetchMediaFromMeta(message.document.id);
-        const base64Data = media ? `data:${media.mimeType};base64,${media.buffer.toString('base64')}` : null;
+        const base64Data = media ? `data:${media.mimeType};base64,${Buffer.from(media.buffer).toString('base64')}` : null;
         saveMessage(wa_id, {
           id: message.id,
           sender: 'user',
@@ -74,14 +83,20 @@ router.post('/webhook', async (req, res) => {
         const audioId = message.audio?.id || message.voice?.id;
         if (audioId) {
           const media = await fetchMediaFromMeta(audioId);
-          const base64Data = media ? `data:audio/ogg;base64,${media.buffer.toString('base64')}` : null;
-          saveMessage(wa_id, {
-            id: message.id,
-            sender: 'user',
-            type: 'audio',
-            content: base64Data,
-            timestamp: new Date().toISOString()
-          });
+          if (media && media.buffer) {
+            // Precise full-buffer base64 string construction without truncation
+            const base64Audio = Buffer.from(media.buffer).toString('base64');
+            const mimeType = media.mimeType || 'audio/ogg';
+            const base64Data = `data:${mimeType};base64,${base64Audio}`;
+
+            saveMessage(wa_id, {
+              id: message.id,
+              sender: 'user',
+              type: 'audio',
+              content: base64Data,
+              timestamp: new Date().toISOString()
+            });
+          }
         }
       }
 

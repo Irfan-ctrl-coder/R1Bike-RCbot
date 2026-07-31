@@ -334,15 +334,15 @@ function renderMessages(messages) {
       body = `<div><i class="fas fa-file-pdf"></i> <a href="${m.content}" download="${m.filename || 'document.pdf'}" style="color:inherit; font-weight:bold;">${m.filename || 'Download PDF'}</a></div>`;
     } else if (m.type === 'audio') {
       body = `
-        <div style="min-width: 220px; padding: 4px 0;">
+        <div style="min-width: 240px; padding: 4px 0;">
           <div style="display: flex; align-items: center; margin-bottom: 6px; font-weight: 600; font-size: 13px;">
             <i class="fas fa-microphone" style="color: #00a884; margin-right: 8px; font-size: 16px;"></i> Voice Message
           </div>
-          <audio controls style="width: 100%; height: 36px; border-radius: 20px; outline: none;">
+          <audio controls preload="auto" style="width: 100%; height: 36px; border-radius: 20px; outline: none;">
             <source src="${m.content}" type="audio/ogg">
+            <source src="${m.content}" type="audio/webm">
             <source src="${m.content}" type="audio/mpeg">
-            <source src="${m.content}" type="audio/mp4">
-            Your browser does not support inline audio playback.
+            Your browser does not support audio playback.
           </audio>
         </div>
       `;
