@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>R1Bikes - Reply Tool</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 500px; margin: 20px auto; padding: 0 15px; background: #f5f5f5; }
+  h2 { color: #075E54; }
+  input, textarea { width: 100%; padding: 10px; margin: 6px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
+  button { background: #25D366; color: white; border: none; padding: 12px; border-radius: 6px; width: 100%; font-size: 16px; cursor: pointer; margin-top: 6px; }
+  button:hover { background: #1ebe5b; }
+  .card { background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  #status { margin-top: 10px; font-weight: bold; }
+  #passwordScreen { text-align: center; margin-top: 100px; }
+</style>
+</head>
+<body>
+
+<div id="passwordScreen">
+  <h2>R1Bikes Reply Tool</h2>
+  <input type="password" id="passwordInput" placeholder="Enter admin password">
+  <button onclick="checkPassword()">Enter</button>
+</div>
+
+<div id="mainScreen" style="display:none;">
+  <h2>R1Bikes - Reply Tool</h2>
+
+  <div class="card">
+    <h3>Send Text Message</h3>
+    <input type="text" id="textTo" placeholder="Customer number (e.g. 916362393439)">
+    <textarea id="textMessage" placeholder="Type your message" rows="3"></textarea>
+    <button onclick="sendText()">Send Text</button>
+  </div>
+
+  <div class="card">
+    <h3>Send Image / PDF</h3>
+    <input type="text" id="fileTo" placeholder="Customer number (e.g. 916362393439)">
+    <input type="file" id="fileInput" accept="image/*,.pdf">
+    <input type="text" id="fileCaption" placeholder="Caption (optional, for images)">
+    <button onclick="sendFile()">Send File</button>
+  </div>
+
+  <div id="status"></div>
+</div>
+
+<script>
+let ADMIN_PASSWORD = '';
+
+function checkPassword() {
+  ADMIN_PASSWORD = document.getElementById('passwordInput').value;
+  document.getElementById('passwordScreen').style.display = 'none';
+  document.getElementById('mainScreen').style.display = 'block';
+}
+
+async function sendText() {
+  const to = document.getElementById('textTo').value.trim();
+  const message = document.getElementById('textMessage').value.trim();
+  const status = document.getElementById('status');
+
+  if (!to || !message) {
+    status.textContent = 'Please fill in both fields.';
+    return;
+  }
+
+  status.textContent = 'Sending...';
+  try {
+    const res = await fetch('/admin/send-text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': ADMIN_PASSWORD },
+      body: JSON.stringify({ to, message })
+    });
+    const data = await res.json();
+    if (data.success) {
+      status.textContent = '✅ Message sent!';
+      document.getElementById('textMessage').value = '';
+    } else {
+      status.textContent = '❌ Error: ' + (data.error || 'Unknown error');
+    }
+  } catch (err) {
+    status.textContent = '❌ Error: ' + err.message;
+  }
+}
+
+async function sendFile() {
+  const to = document.getElementById('fileTo').value.trim();
+  const caption = document.getElementById('fileCaption').value.trim();
+  const fileInput = document.getElementById('fileInput');
+  const status = document.getElementById('status');
+
+  if (!to || !fileInput.files[0]) {
+    status.textContent = 'Please select a customer number and a file.';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('to', to);
+  formData.append('caption', caption);
+  formData.append('file', fileInput.files[0]);
+
+  status.textContent = 'Uploading and sending...';
+  try {
+    const res = await fetch('/admin/send-file', {
+      method: 'POST',
+      headers: { 'x-admin-password': ADMIN_PASSWORD },
+      body: formData
+    });
+    const data = await res.json();
+    if (data.success) {
+      status.textContent = '✅ File sent!';
+      fileInput.value = '';
+    } else {
+      status.textContent = '❌ Error: ' + (data.error || 'Unknown error');
+    }
+  } catch (err) {
+    status.textContent = '❌ Error: ' + err.message;
+  }
+}
+</script>
+
+</body>
+</html>

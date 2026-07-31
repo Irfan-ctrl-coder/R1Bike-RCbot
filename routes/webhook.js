@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { handleIncomingMessage } = require('../utils/stateMachine');
 
-// 1. Webhook verification (Meta calls this once, when you set up the webhook URL)
 router.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
@@ -16,18 +15,16 @@ router.get('/webhook', (req, res) => {
   }
 });
 
-// 2. Receiving actual messages
 router.post('/webhook', async (req, res) => {
   try {
     const body = req.body;
-
     const entry = body.entry?.[0];
     const change = entry?.changes?.[0];
     const value = change?.value;
     const message = value?.messages?.[0];
 
     if (message) {
-      const wa_id = message.from; // sender's phone number
+      const wa_id = message.from;
       let messageText = null;
       let buttonReplyId = null;
 
@@ -38,14 +35,13 @@ router.post('/webhook', async (req, res) => {
       }
 
       console.log(`Message from ${wa_id}: text="${messageText}" buttonReply="${buttonReplyId}"`);
-
       await handleIncomingMessage(wa_id, messageText, buttonReplyId);
     }
 
-    res.sendStatus(200); // always respond 200 quickly
+    res.sendStatus(200);
   } catch (err) {
     console.error('Error handling webhook:', err.message);
-    res.sendStatus(200); // still respond 200 so Meta doesn't retry/flag
+    res.sendStatus(200);
   }
 });
 
