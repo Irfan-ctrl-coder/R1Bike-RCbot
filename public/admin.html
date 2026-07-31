@@ -34,22 +34,19 @@
   * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
   body { background: var(--bg-main); height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 
-  /* Login Overlay */
   #loginOverlay { position: fixed; inset: 0; background: #00a884; display: flex; align-items: center; justify-content: center; z-index: 1000; }
   .login-box { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 90%; max-width: 360px; text-align: center; }
   .login-box h2 { color: #00a884; margin-bottom: 20px; }
   .login-box input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 6px; font-size: 16px; outline: none; }
   .login-box button { width: 100%; padding: 12px; background: #00a884; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }
 
-  /* App Layout */
   .app-container { width: 100%; height: 100vh; display: flex; background: var(--panel-bg); }
-  
-  /* Sidebar */
+
   .sidebar { width: 350px; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; background: var(--panel-bg); transition: transform 0.3s ease; }
   .sidebar-header { height: 60px; background: var(--header-bg); padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); }
   .sidebar-header h3 { color: var(--text-primary); font-size: 18px; }
   .header-actions i { color: var(--text-secondary); font-size: 18px; margin-left: 15px; cursor: pointer; }
-  
+
   .search-box { padding: 8px 12px; background: var(--panel-bg); border-bottom: 1px solid var(--border-color); }
   .search-wrapper { background: var(--header-bg); border-radius: 8px; padding: 6px 12px; display: flex; align-items: center; }
   .search-wrapper i { color: var(--text-secondary); margin-right: 10px; }
@@ -65,7 +62,6 @@
   .chat-time { font-size: 12px; color: var(--text-secondary); }
   .chat-preview { font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-  /* Main Chat Window */
   .chat-window { flex: 1; display: flex; flex-direction: column; background: var(--bg-main); position: relative; }
   .chat-header { height: 60px; background: var(--header-bg); padding: 10px 16px; display: flex; align-items: center; border-bottom: 1px solid var(--border-color); z-index: 10; }
   .back-btn { display: none; color: var(--text-secondary); font-size: 20px; margin-right: 12px; cursor: pointer; }
@@ -80,13 +76,11 @@
   .message-time { font-size: 10px; color: var(--text-secondary); text-align: right; margin-top: 4px; }
   .message-media { max-width: 100%; border-radius: 6px; margin-top: 5px; max-height: 250px; object-fit: cover; cursor: pointer; }
 
-  /* Input Footer */
   .chat-footer { background: var(--header-bg); padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--border-color); }
   .chat-footer input[type="text"] { flex: 1; padding: 10px 14px; border-radius: 8px; border: none; outline: none; background: var(--panel-bg); color: var(--text-primary); font-size: 14px; }
   .attach-btn, .mic-btn, .send-btn { background: transparent; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; padding: 5px; }
   .send-btn { color: #00a884; }
 
-  /* Recording Bar */
   .recording-bar { display: none; flex: 1; align-items: center; justify-content: space-between; background: var(--panel-bg); padding: 6px 14px; border-radius: 8px; color: #ea4335; font-weight: bold; }
   .recording-actions { display: flex; gap: 15px; }
   .recording-actions i { font-size: 20px; cursor: pointer; }
@@ -95,11 +89,9 @@
 
   #fileInput { display: none; }
 
-  /* Empty State */
   .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); }
   .empty-state i { font-size: 60px; margin-bottom: 15px; color: #00a884; }
 
-  /* Responsive Rules */
   @media (max-width: 768px) {
     .sidebar { width: 100%; position: absolute; height: 100%; z-index: 20; }
     .chat-window { width: 100%; position: absolute; height: 100%; z-index: 10; }
@@ -119,7 +111,6 @@
 </div>
 
 <div class="app-container" id="appContainer">
-  <!-- Sidebar -->
   <div class="sidebar">
     <div class="sidebar-header">
       <h3>Chats</h3>
@@ -138,7 +129,6 @@
     <div class="chat-list" id="chatList"></div>
   </div>
 
-  <!-- Chat Window -->
   <div class="chat-window">
     <div class="empty-state" id="emptyState">
       <i class="fab fa-whatsapp"></i>
@@ -163,7 +153,7 @@
       <div class="chat-footer">
         <label for="fileInput" class="attach-btn" title="Attach Image, PDF, or Audio"><i class="fas fa-paperclip"></i></label>
         <input type="file" id="fileInput" accept="image/*,.pdf,audio/*" onchange="sendFile()">
-        
+
         <button class="mic-btn" id="micBtn" onclick="toggleRecording()" title="Record Voice Note"><i class="fas fa-microphone"></i></button>
 
         <div class="recording-bar" id="recordingBar">
@@ -202,7 +192,7 @@ window.addEventListener('DOMContentLoaded', () => {
 function authenticate() {
   const inputPwd = document.getElementById('passwordInput').value.trim();
   if (!inputPwd) return alert('Enter Password');
-  
+
   ADMIN_PASSWORD = inputPwd;
   localStorage.setItem('r1_admin_password', ADMIN_PASSWORD);
   document.getElementById('loginOverlay').style.display = 'none';
@@ -265,7 +255,7 @@ function renderChatList(list) {
 
 function filterChats() {
   const q = document.getElementById('searchInput').value.toLowerCase();
-  const filtered = conversationsCache.filter(c => 
+  const filtered = conversationsCache.filter(c =>
     c.wa_id.toLowerCase().includes(q) || (c.token && c.token.toLowerCase().includes(q))
   );
   renderChatList(filtered);
@@ -333,15 +323,19 @@ function renderMessages(messages) {
     } else if (m.type === 'document') {
       body = `<div><i class="fas fa-file-pdf"></i> <a href="${m.content}" download="${m.filename || 'document.pdf'}" style="color:inherit; font-weight:bold;">${m.filename || 'Download PDF'}</a></div>`;
     } else if (m.type === 'audio') {
+      // Read the real mime type directly from the data URL prefix, so <audio> declares
+      // the correct type instead of guessing with multiple mismatched <source> tags.
+      // Mismatched declared type vs actual bytes is what caused partial/broken playback.
+      const mimeMatch = m.content.match(/^data:([^;]+);/);
+      const actualMime = mimeMatch ? mimeMatch[1] : 'audio/mpeg';
+
       body = `
         <div style="min-width: 240px; padding: 4px 0;">
           <div style="display: flex; align-items: center; margin-bottom: 6px; font-weight: 600; font-size: 13px;">
             <i class="fas fa-microphone" style="color: #00a884; margin-right: 8px; font-size: 16px;"></i> Voice Message
           </div>
           <audio controls preload="auto" style="width: 100%; height: 36px; border-radius: 20px; outline: none;">
-            <source src="${m.content}" type="audio/ogg">
-            <source src="${m.content}" type="audio/webm">
-            <source src="${m.content}" type="audio/mpeg">
+            <source src="${m.content}" type="${actualMime}">
             Your browser does not support audio playback.
           </audio>
         </div>
@@ -360,7 +354,7 @@ async function toggleRecording() {
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    
+
     mediaRecorder = new MediaRecorder(stream);
     audioChunks = [];
 
