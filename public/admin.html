@@ -84,8 +84,23 @@
   /* Input Footer */
   .chat-footer { background: var(--header-bg); padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--border-color); }
   .chat-footer input[type="text"] { flex: 1; padding: 10px 14px; border-radius: 8px; border: none; outline: none; background: var(--panel-bg); color: var(--text-primary); font-size: 14px; }
-  .attach-btn, .send-btn { background: transparent; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; padding: 5px; }
+  .attach-btn, .mic-btn, .send-btn { background: transparent; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; padding: 5px; }
   .send-btn { color: #00a884; }
+  .mic-btn.recording { color: #ea4335; animation: pulse 1s infinite; }
+  
+  @keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+  }
+
+  /* Recording Bar */
+  .recording-bar { display: none; flex: 1; align-items: center; justify-content: space-between; background: var(--panel-bg); padding: 6px 14px; border-radius: 8px; color: #ea4335; font-weight: bold; }
+  .recording-actions { display: flex; gap: 15px; }
+  .recording-actions i { font-size: 20px; cursor: pointer; }
+  .cancel-rec { color: #ea4335; }
+  .send-rec { color: #00a884; }
+
   #fileInput { display: none; }
 
   /* Empty State */
@@ -153,10 +168,21 @@
       <div class="message-area" id="messageArea"></div>
 
       <div class="chat-footer">
-        <label for="fileInput" class="attach-btn" title="Attach Image, PDF, or Voice Note"><i class="fas fa-paperclip"></i></label>
+        <label for="fileInput" class="attach-btn" title="Attach Image, PDF, or Audio"><i class="fas fa-paperclip"></i></label>
         <input type="file" id="fileInput" accept="image/*,.pdf,audio/*" onchange="sendFile()">
+        
+        <button class="mic-btn" id="micBtn" onclick="toggleRecording()" title="Record Voice Note"><i class="fas fa-microphone"></i></button>
+
+        <div class="recording-bar" id="recordingBar">
+          <span><i class="fas fa-circle"></i> Recording: <span id="recTimer">00:00</span></span>
+          <div class="recording-actions">
+            <i class="fas fa-trash cancel-rec" onclick="cancelRecording()" title="Cancel"></i>
+            <i class="fas fa-paper-plane send-rec" onclick="stopAndSendRecording()" title="Send Voice Note"></i>
+          </div>
+        </div>
+
         <input type="text" id="messageInput" placeholder="Type a message..." onkeypress="handleKeyPress(event)">
-        <button class="send-btn" onclick="sendTextMessage()"><i class="fas fa-paper-plane"></i></button>
+        <button class="send-btn" id="sendBtn" onclick="sendTextMessage()"><i class="fas fa-paper-plane"></i></button>
       </div>
     </div>
   </div>
@@ -166,6 +192,12 @@
 let ADMIN_PASSWORD = '';
 let activeWaId = null;
 let conversationsCache = [];
+
+// Audio Recording variables
+let mediaRecorder = null;
+let audioChunks = [];
+let recInterval = null;
+let recSeconds = 0;
 
 function authenticate() {
   ADMIN_PASSWORD = document.getElementById('passwordInput').value.trim();
@@ -223,7 +255,6 @@ function filterChats() {
   renderChatList(filtered);
 }
 
-// Mobile Back Navigation Handler
 async function selectChat(wa_id, token) {
   activeWaId = wa_id;
   document.getElementById('appContainer').classList.add('chat-active');
@@ -294,6 +325,83 @@ function renderMessages(messages) {
     area.appendChild(bubble);
   });
   area.scrollTop = area.scrollHeight;
+}
+
+/* Voice Note Live Recording Logic */
+async function toggleRecording() {
+  if (mediaRecorder && mediaRecorder.state === 'recording') return;
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    audioChunks = [];
+
+    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+    mediaRecorder.start();
+
+    document.getElementById('micBtn').style.display = 'none';
+    document.getElementById('messageInput').style.display = 'none';
+    document.getElementById('sendBtn').style.display = 'none';
+    document.getElementById('recordingBar').style.display = 'flex';
+
+    recSeconds = 0;
+    document.getElementById('recTimer').textContent = '00:00';
+    recInterval = setInterval(() => {
+      recSeconds++;
+      const mins = String(Math.floor(recSeconds / 60)).padStart(2, '0');
+      const secs = String(recSeconds % 60).padStart(2, '0');
+      document.getElementById('recTimer').textContent = `${mins}:${secs}`;
+    }, 1000);
+
+  } catch (err) {
+    alert('Microphone access rejected or not supported: ' + err.message);
+  }
+}
+
+function resetRecUI() {
+  clearInterval(recInterval);
+  document.getElementById('recordingBar').style.display = 'none';
+  document.getElementById('micBtn').style.display = 'inline-block';
+  document.getElementById('messageInput').style.display = 'inline-block';
+  document.getElementById('sendBtn').style.display = 'inline-block';
+}
+
+function cancelRecording() {
+  if (mediaRecorder) {
+    mediaRecorder.stop();
+    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+  }
+  resetRecUI();
+}
+
+function stopAndSendRecording() {
+  if (!mediaRecorder) return;
+
+  mediaRecorder.onstop = async () => {
+    const audioBlob = new Blob(audioChunks, { type: 'audio/ogg; codecs=opus' });
+    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    resetRecUI();
+
+    if (!activeWaId) return;
+
+    const formData = new FormData();
+    formData.append('to', activeWaId);
+    formData.append('file', audioBlob, 'voicenote.opus');
+
+    try {
+      await fetch('/admin/send-file', {
+        method: 'POST',
+        headers: { 'x-admin-password': ADMIN_PASSWORD },
+        body: formData
+      });
+      await loadMessages();
+      loadConversations();
+    } catch (err) {
+      alert('Error sending voice note: ' + err.message);
+    }
+  };
+
+  mediaRecorder.stop();
 }
 
 async function sendTextMessage() {
