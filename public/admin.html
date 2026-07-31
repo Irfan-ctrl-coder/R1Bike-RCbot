@@ -361,14 +361,7 @@ async function toggleRecording() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     
-    let options = {};
-    if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
-      options = { mimeType: 'audio/ogg;codecs=opus' };
-    } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-      options = { mimeType: 'audio/webm;codecs=opus' };
-    }
-
-    mediaRecorder = new MediaRecorder(stream, options);
+    mediaRecorder = new MediaRecorder(stream);
     audioChunks = [];
 
     mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
@@ -413,7 +406,7 @@ function stopAndSendRecording() {
   if (!mediaRecorder) return;
 
   mediaRecorder.onstop = async () => {
-    const audioBlob = new Blob(audioChunks, { type: 'audio/ogg; codecs=opus' });
+    const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
     mediaRecorder.stream.getTracks().forEach(track => track.stop());
     resetRecUI();
 
@@ -421,7 +414,7 @@ function stopAndSendRecording() {
 
     const formData = new FormData();
     formData.append('to', activeWaId);
-    formData.append('file', audioBlob, 'Voice_Note.opus');
+    formData.append('file', audioBlob, 'live_voice.webm');
     formData.append('isLiveVoice', 'true');
 
     try {

@@ -1,10 +1,41 @@
 const axios = require('axios');
 const FormData = require('form-data');
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
+const { Readable, Writable } = require('stream');
+
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
 const API_URL = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
 const MEDIA_URL = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/media`;
+
+// Converts WebM recordings to true WhatsApp Ogg/Opus voice notes
+function convertToOggOpus(inputBuffer) {
+  return new Promise((resolve, reject) => {
+    const inputStream = new Readable();
+    inputStream.push(inputBuffer);
+    inputStream.push(null);
+
+    const chunks = [];
+    const outputStream = new Writable({
+      write(chunk, encoding, callback) {
+        chunks.push(chunk);
+        callback();
+      }
+    });
+
+    ffmpeg(inputStream)
+      .audioCodec('libopus')
+      .audioChannels(1) // WhatsApp requires mono channel for PTT voice notes
+      .audioFrequency(16000) // 16kHz sampling rate
+      .format('ogg')
+      .on('error', (err) => reject(err))
+      .on('end', () => resolve(Buffer.concat(chunks)))
+      .pipe(outputStream);
+  });
+}
 
 async function sendTextMessage(to, text) {
   try {
@@ -47,7 +78,7 @@ async function uploadMedia(fileBuffer, mimeType) {
   try {
     const form = new FormData();
     form.append('messaging_product', 'whatsapp');
-    form.append('file', fileBuffer, { filename: 'audio_file.ogg', contentType: mimeType });
+    form.append('file', fileBuffer, { filename: 'voice.ogg', contentType: mimeType || 'audio/ogg' });
 
     const response = await axios.post(MEDIA_URL, form, {
       headers: { Authorization: `Bearer ${ACCESS_TOKEN}`, ...form.getHeaders() }
@@ -83,7 +114,7 @@ async function sendDocumentMessage(to, mediaId, filename) {
       messaging_product: 'whatsapp',
       to: to,
       type: 'document',
-      document: { id: mediaId, filename: filename || 'Voice_Note.opus' }
+      document: { id: mediaId, filename: filename || 'document.pdf' }
     }, { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } });
   } catch (err) {
     console.error('Error sending document:', err.response?.data || err.message);
@@ -127,6 +158,7 @@ async function fetchMediaFromMeta(mediaId) {
 }
 
 module.exports = {
+  convertToOggOpus,
   sendTextMessage,
   sendButtonMessage,
   uploadMedia,

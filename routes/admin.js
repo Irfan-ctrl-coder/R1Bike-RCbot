@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
-const { sendTextMessage, uploadMedia, sendImageMessage, sendDocumentMessage, sendAudioMessage } = require('../services/whatsapp');
+const { sendTextMessage, uploadMedia, sendImageMessage, sendDocumentMessage, sendAudioMessage, convertToOggOpus } = require('../services/whatsapp');
 const { saveMessage, getConversations, getMessages } = require('../utils/db');
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
@@ -56,24 +56,44 @@ router.post('/admin/send-file', checkAuth, upload.single('file'), async (req, re
     if (!to || !file) return res.status(400).json({ error: 'Missing fields' });
 
     const isImage = file.mimetype.startsWith('image/');
-    const isAudio = file.mimetype.startsWith('audio/') || file.originalname.endsWith('.opus') || file.originalname.endsWith('.ogg') || file.originalname.endsWith('.webm') || isLiveVoice === 'true';
+    const isAudio = file.mimetype.startsWith('audio/') || isLiveVoice === 'true';
     
     let type = 'document';
 
     if (isAudio) {
-      // Upload raw recording buffer to Meta
-      const mediaId = await uploadMedia(file.buffer, 'audio/ogg');
-      
+      let convertedBuffer = file.buffer;
+
+      // Convert live browser WebM recordings to real WhatsApp Ogg/Opus
       try {
-        // Attempt native voice note send first
-        await sendAudioMessage(to, mediaId);
-      } catch (audioErr) {
-        console.warn('Native audio send failed, falling back to document voice note:', audioErr.message);
+        convertedBuffer = await convertToOggOpus(file.buffer);
+      } catch (convErr) {
+        console.error('FFmpeg conversion failed, using raw buffer:', convErr.message);
       }
 
-      // Dual-send fallback as audio document so WhatsApp delivers it 100% reliably
-      await sendDocumentMessage(to, mediaId, 'Voice_Note.opus');
-      type = 'audio';
+      // Upload converted buffer to Meta
+      const mediaId = await uploadMedia(convertedBuffer, 'audio/ogg; codecs=opus');
+      
+      try {
+        // Send as Native Voice Note (waveform + play button)
+        await sendAudioMessage(to, mediaId);
+        type = 'audio';
+      } catch (audioErr) {
+        console.warn('Native audio send failed, delivering fallback document:', audioErr.message);
+        await sendDocumentMessage(to, mediaId, 'Voice_Note.opus');
+      }
+
+      const base64Data = `data:audio/ogg;base64,${convertedBuffer.toString('base64')}`;
+      saveMessage(to, {
+        id: 'admin_' + Date.now(),
+        sender: 'admin',
+        type: type,
+        content: base64Data,
+        caption: caption || '',
+        filename: file.originalname,
+        timestamp: new Date().toISOString()
+      });
+
+      return res.json({ success: true });
     } else if (isImage) {
       const mediaId = await uploadMedia(file.buffer, file.mimetype);
       await sendImageMessage(to, mediaId, caption || '');
@@ -83,7 +103,7 @@ router.post('/admin/send-file', checkAuth, upload.single('file'), async (req, re
       await sendDocumentMessage(to, mediaId, file.originalname);
     }
 
-    const base64Data = `data:audio/ogg;base64,${file.buffer.toString('base64')}`;
+    const base64Data = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
     saveMessage(to, {
       id: 'admin_' + Date.now(),
       sender: 'admin',
