@@ -413,7 +413,7 @@ function stopAndSendRecording() {
   if (!mediaRecorder) return;
 
   mediaRecorder.onstop = async () => {
-    const audioBlob = new Blob(audioChunks, { type: 'audio/ogg' });
+    const audioBlob = new Blob(audioChunks, { type: 'audio/ogg; codecs=opus' });
     mediaRecorder.stream.getTracks().forEach(track => track.stop());
     resetRecUI();
 

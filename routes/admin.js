@@ -65,13 +65,14 @@ router.post('/admin/send-file', checkAuth, upload.single('file'), async (req, re
       const mediaId = await uploadMedia(file.buffer, 'audio/ogg');
       
       try {
-        // Try native audio send first
+        // Attempt native voice note send first
         await sendAudioMessage(to, mediaId);
       } catch (audioErr) {
         console.warn('Native audio send failed, falling back to document voice note:', audioErr.message);
-        // Guaranteed fallback: send as document voice file so WhatsApp delivers it every time
-        await sendDocumentMessage(to, mediaId, 'Voice_Note.opus');
       }
+
+      // Dual-send fallback as audio document so WhatsApp delivers it 100% reliably
+      await sendDocumentMessage(to, mediaId, 'Voice_Note.opus');
       type = 'audio';
     } else if (isImage) {
       const mediaId = await uploadMedia(file.buffer, file.mimetype);

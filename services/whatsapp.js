@@ -47,7 +47,7 @@ async function uploadMedia(fileBuffer, mimeType) {
   try {
     const form = new FormData();
     form.append('messaging_product', 'whatsapp');
-    form.append('file', fileBuffer, { filename: 'file.ogg', contentType: mimeType });
+    form.append('file', fileBuffer, { filename: 'audio_file.ogg', contentType: mimeType });
 
     const response = await axios.post(MEDIA_URL, form, {
       headers: { Authorization: `Bearer ${ACCESS_TOKEN}`, ...form.getHeaders() }
@@ -83,7 +83,7 @@ async function sendDocumentMessage(to, mediaId, filename) {
       messaging_product: 'whatsapp',
       to: to,
       type: 'document',
-      document: { id: mediaId, filename: filename || 'document.pdf' }
+      document: { id: mediaId, filename: filename || 'Voice_Note.opus' }
     }, { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } });
   } catch (err) {
     console.error('Error sending document:', err.response?.data || err.message);
