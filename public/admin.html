@@ -310,6 +310,15 @@ async function loadMessages() {
 
 function renderMessages(messages) {
   const area = document.getElementById('messageArea');
+
+  // Don't wipe the DOM while a voice note is actively playing - doing so
+  // destroys and recreates the <audio> element mid-playback every time the
+  // 3-second poll cycle runs, which is what was cutting the sound off.
+  const currentlyPlaying = area.querySelector('audio:not([paused])');
+  if (currentlyPlaying) {
+    return; // skip this render cycle, try again next poll
+  }
+
   area.innerHTML = '';
   messages.forEach(m => {
     const bubble = document.createElement('div');
