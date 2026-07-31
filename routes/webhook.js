@@ -86,11 +86,11 @@ router.post('/webhook', async (req, res) => {
             let base64Data = null;
             
             try {
-              // Convert incoming OGG/Opus to clean MP3 for seamless browser playback
+              // Convert to MP3 with full duration header metadata
               const mp3Buffer = await convertToMp3(media.buffer);
               base64Data = `data:audio/mp3;base64,${mp3Buffer.toString('base64')}`;
             } catch (err) {
-              console.error('Audio conversion to MP3 failed, falling back to raw stream:', err.message);
+              console.error('MP3 Conversion failed, using raw buffer:', err.message);
               const base64Audio = Buffer.from(media.buffer).toString('base64');
               base64Data = `data:${media.mimeType || 'audio/ogg'};base64,${base64Audio}`;
             }

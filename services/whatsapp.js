@@ -3,6 +3,9 @@ const FormData = require('form-data');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 const { Readable, Writable } = require('stream');
+const fs = require('fs');
+const path = require('path');
+const { v4: uuidv4 } = require('uuid');
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -37,27 +40,40 @@ function convertToOggOpus(inputBuffer) {
   });
 }
 
-// Converts incoming WhatsApp OGG/Opus to MP3 for smooth web dashboard streaming
+// Converts incoming WhatsApp OGG/Opus to clean MP3 WITH EXACT DURATION METADATA
 function convertToMp3(inputBuffer) {
   return new Promise((resolve, reject) => {
-    const inputStream = new Readable();
-    inputStream.push(inputBuffer);
-    inputStream.push(null);
+    const tempId = uuidv4();
+    const tempInput = path.join('/tmp', `${tempId}_in.ogg`);
+    const tempOutput = path.join('/tmp', `${tempId}_out.mp3`);
 
-    const chunks = [];
-    const outputStream = new Writable({
-      write(chunk, encoding, callback) {
-        chunks.push(chunk);
-        callback();
-      }
+    // Write buffer to temp file so ffmpeg can analyze full stream duration
+    fs.writeFile(tempInput, inputBuffer, (err) => {
+      if (err) return reject(err);
+
+      ffmpeg(tempInput)
+        .audioCodec('libmp3lame')
+        .audioBitrate(128)
+        .format('mp3')
+        .on('error', (ffmpegErr) => {
+          // Cleanup on failure
+          if (fs.existsSync(tempInput)) fs.unlinkSync(tempInput);
+          if (fs.existsSync(tempOutput)) fs.unlinkSync(tempOutput);
+          reject(ffmpegErr);
+        })
+        .on('end', () => {
+          // Read full converted MP3 file with proper headers
+          fs.readFile(tempOutput, (readErr, convertedBuffer) => {
+            // Cleanup temp files
+            if (fs.existsSync(tempInput)) fs.unlinkSync(tempInput);
+            if (fs.existsSync(tempOutput)) fs.unlinkSync(tempOutput);
+
+            if (readErr) return reject(readErr);
+            resolve(convertedBuffer);
+          });
+        })
+        .save(tempOutput);
     });
-
-    ffmpeg(inputStream)
-      .audioCodec('libmp3lame')
-      .format('mp3')
-      .on('error', (err) => reject(err))
-      .on('end', () => resolve(Buffer.concat(chunks)))
-      .pipe(outputStream);
   });
 }
 
