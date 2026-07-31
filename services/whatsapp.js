@@ -28,9 +28,33 @@ function convertToOggOpus(inputBuffer) {
 
     ffmpeg(inputStream)
       .audioCodec('libopus')
-      .audioChannels(1) // WhatsApp requires mono channel for PTT voice notes
-      .audioFrequency(16000) // 16kHz sampling rate
+      .audioChannels(1)
+      .audioFrequency(16000)
       .format('ogg')
+      .on('error', (err) => reject(err))
+      .on('end', () => resolve(Buffer.concat(chunks)))
+      .pipe(outputStream);
+  });
+}
+
+// Converts incoming WhatsApp OGG/Opus to MP3 for smooth web dashboard streaming
+function convertToMp3(inputBuffer) {
+  return new Promise((resolve, reject) => {
+    const inputStream = new Readable();
+    inputStream.push(inputBuffer);
+    inputStream.push(null);
+
+    const chunks = [];
+    const outputStream = new Writable({
+      write(chunk, encoding, callback) {
+        chunks.push(chunk);
+        callback();
+      }
+    });
+
+    ffmpeg(inputStream)
+      .audioCodec('libmp3lame')
+      .format('mp3')
       .on('error', (err) => reject(err))
       .on('end', () => resolve(Buffer.concat(chunks)))
       .pipe(outputStream);
@@ -159,6 +183,7 @@ async function fetchMediaFromMeta(mediaId) {
 
 module.exports = {
   convertToOggOpus,
+  convertToMp3,
   sendTextMessage,
   sendButtonMessage,
   uploadMedia,

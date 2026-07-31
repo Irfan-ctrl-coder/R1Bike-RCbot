@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { handleIncomingMessage } = require('../utils/stateMachine');
 const { saveMessage } = require('../utils/db');
-const { fetchMediaFromMeta } = require('../services/whatsapp');
+const { fetchMediaFromMeta, convertToMp3 } = require('../services/whatsapp');
 
 router.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
@@ -25,7 +25,6 @@ router.post('/webhook', async (req, res) => {
     const value = change?.value;
     const message = value?.messages?.[0];
 
-    // Log delivery failure statuses if Meta drops a message
     if (value?.statuses) {
       value.statuses.forEach(status => {
         if (status.status === 'failed') {
@@ -84,10 +83,17 @@ router.post('/webhook', async (req, res) => {
         if (audioId) {
           const media = await fetchMediaFromMeta(audioId);
           if (media && media.buffer) {
-            // Precise full-buffer base64 string construction without truncation
-            const base64Audio = Buffer.from(media.buffer).toString('base64');
-            const mimeType = media.mimeType || 'audio/ogg';
-            const base64Data = `data:${mimeType};base64,${base64Audio}`;
+            let base64Data = null;
+            
+            try {
+              // Convert incoming OGG/Opus to clean MP3 for seamless browser playback
+              const mp3Buffer = await convertToMp3(media.buffer);
+              base64Data = `data:audio/mp3;base64,${mp3Buffer.toString('base64')}`;
+            } catch (err) {
+              console.error('Audio conversion to MP3 failed, falling back to raw stream:', err.message);
+              const base64Audio = Buffer.from(media.buffer).toString('base64');
+              base64Data = `data:${media.mimeType || 'audio/ogg'};base64,${base64Audio}`;
+            }
 
             saveMessage(wa_id, {
               id: message.id,
