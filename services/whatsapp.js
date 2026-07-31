@@ -47,7 +47,7 @@ async function uploadMedia(fileBuffer, mimeType) {
   try {
     const form = new FormData();
     form.append('messaging_product', 'whatsapp');
-    form.append('file', fileBuffer, { filename: 'file', contentType: mimeType });
+    form.append('file', fileBuffer, { filename: 'file.ogg', contentType: mimeType });
 
     const response = await axios.post(MEDIA_URL, form, {
       headers: { Authorization: `Bearer ${ACCESS_TOKEN}`, ...form.getHeaders() }
@@ -61,12 +61,16 @@ async function uploadMedia(fileBuffer, mimeType) {
 
 async function sendImageMessage(to, mediaId, caption) {
   try {
-    await axios.post(API_URL, {
+    const payload = {
       messaging_product: 'whatsapp',
       to: to,
       type: 'image',
-      image: { id: mediaId, caption: caption || '' }
-    }, { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } });
+      image: { id: mediaId }
+    };
+    if (caption && caption.trim()) {
+      payload.image.caption = caption.trim();
+    }
+    await axios.post(API_URL, payload, { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } });
   } catch (err) {
     console.error('Error sending image:', err.response?.data || err.message);
     throw err;

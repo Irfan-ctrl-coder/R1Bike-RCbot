@@ -56,23 +56,22 @@ router.post('/admin/send-file', checkAuth, upload.single('file'), async (req, re
     if (!to || !file) return res.status(400).json({ error: 'Missing fields' });
 
     const isImage = file.mimetype.startsWith('image/');
-    const isAudio = file.mimetype.startsWith('audio/') || file.originalname.endsWith('.opus') || file.originalname.endsWith('.ogg');
+    const isAudio = file.mimetype.startsWith('audio/') || file.originalname.endsWith('.opus') || file.originalname.endsWith('.ogg') || file.originalname.endsWith('.webm');
     
     let uploadMimeType = file.mimetype;
+    let type = 'document';
+
     if (isAudio) {
       uploadMimeType = 'audio/ogg';
-    }
-
-    const mediaId = await uploadMedia(file.buffer, uploadMimeType);
-
-    let type = 'document';
-    if (isImage) {
-      await sendImageMessage(to, mediaId, caption);
-      type = 'image';
-    } else if (isAudio) {
+      const mediaId = await uploadMedia(file.buffer, uploadMimeType);
       await sendAudioMessage(to, mediaId);
       type = 'audio';
+    } else if (isImage) {
+      const mediaId = await uploadMedia(file.buffer, uploadMimeType);
+      await sendImageMessage(to, mediaId, caption || '');
+      type = 'image';
     } else {
+      const mediaId = await uploadMedia(file.buffer, uploadMimeType);
       await sendDocumentMessage(to, mediaId, file.originalname);
     }
 
@@ -89,7 +88,7 @@ router.post('/admin/send-file', checkAuth, upload.single('file'), async (req, re
 
     res.json({ success: true });
   } catch (err) {
-    console.error('Send file error:', err);
+    console.error('Send file error:', err.response?.data || err.message);
     res.status(500).json({ error: err.message });
   }
 });
