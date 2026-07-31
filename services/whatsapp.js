@@ -87,7 +87,6 @@ async function sendDocumentMessage(to, mediaId, filename) {
   }
 }
 
-// Send Voice Note / Audio Message
 async function sendAudioMessage(to, mediaId) {
   try {
     await axios.post(API_URL, {
@@ -102,7 +101,6 @@ async function sendAudioMessage(to, mediaId) {
   }
 }
 
-// Download incoming media buffer from Meta
 async function fetchMediaFromMeta(mediaId) {
   try {
     const metaRes = await axios.get(`https://graph.facebook.com/v20.0/${mediaId}`, {

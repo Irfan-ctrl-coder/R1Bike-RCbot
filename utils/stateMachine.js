@@ -1,7 +1,7 @@
 const { sendTextMessage, sendButtonMessage } = require('../services/whatsapp');
-const { generateToken } = require('./tokenGenerator'); // Same folder (utils)
+const { generateToken } = require('./tokenGenerator');
 const { logOrder } = require('../services/sheets');
-const { updateConversationMeta } = require('./db');   // Same folder (utils)
+const { updateConversationMeta } = require('./db');
 
 const userStates = {};
 

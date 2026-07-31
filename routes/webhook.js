@@ -72,7 +72,8 @@ router.post('/webhook', async (req, res) => {
         });
       } else if (message.type === 'audio') {
         const media = await fetchMediaFromMeta(message.audio.id);
-        const base64Data = media ? `data:${media.mimeType};base64,${media.buffer.toString('base64')}` : null;
+        const mimeType = media?.mimeType?.includes('audio') ? media.mimeType : 'audio/ogg';
+        const base64Data = media ? `data:${mimeType};base64,${media.buffer.toString('base64')}` : null;
         saveMessage(wa_id, {
           id: message.id,
           sender: 'user',
