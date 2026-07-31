@@ -74,11 +74,12 @@
   .active-user-details p { color: var(--text-secondary); font-size: 12px; }
 
   .message-area { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-  .message-bubble { max-width: 65%; padding: 8px 12px; border-radius: 8px; font-size: 14px; line-height: 1.4; position: relative; word-wrap: break-word; }
+  .message-bubble { max-width: 75%; padding: 8px 12px; border-radius: 8px; font-size: 14px; line-height: 1.4; position: relative; word-wrap: break-word; }
   .message-bubble.inbound { background: var(--msg-in); color: var(--text-primary); align-self: flex-start; border-top-left-radius: 0; }
   .message-bubble.outbound { background: var(--msg-out); color: var(--text-primary); align-self: flex-end; border-top-right-radius: 0; }
   .message-time { font-size: 10px; color: var(--text-secondary); text-align: right; margin-top: 4px; }
   .message-media { max-width: 100%; border-radius: 6px; margin-top: 5px; max-height: 250px; object-fit: cover; cursor: pointer; }
+  audio { width: 100%; max-width: 250px; margin-top: 5px; outline: none; }
 
   /* Input Footer */
   .chat-footer { background: var(--header-bg); padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--border-color); }
@@ -152,10 +153,10 @@
       <div class="message-area" id="messageArea"></div>
 
       <div class="chat-footer">
-        <label for="fileInput" class="attach-btn"><i class="fas fa-paperclip"></i></label>
-        <input type="file" id="fileInput" accept="image/*,.pdf" onchange="sendFile()">
+        <label for="fileInput" class="attach-btn" title="Attach Image, PDF, or Voice Note"><i class="fas fa-paperclip"></i></label>
+        <input type="file" id="fileInput" accept="image/*,.pdf,audio/*" onchange="sendFile()">
         <input type="text" id="messageInput" placeholder="Type a message..." onkeypress="handleKeyPress(event)">
-        <button class="send-btn" onclick="sendTextMessage()"><i class="fas fa-paperplane"></i></button>
+        <button class="send-btn" onclick="sendTextMessage()"><i class="fas fa-paper-plane"></i></button>
       </div>
     </div>
   </div>
@@ -222,6 +223,7 @@ function filterChats() {
   renderChatList(filtered);
 }
 
+// Mobile Back Navigation Handler
 async function selectChat(wa_id, token) {
   activeWaId = wa_id;
   document.getElementById('appContainer').classList.add('chat-active');
@@ -233,6 +235,10 @@ async function selectChat(wa_id, token) {
   document.getElementById('headerSubtitle').textContent = `Token: ${token}`;
   document.getElementById('headerAvatar').textContent = token !== 'Pending' ? token.substring(0, 3) : 'U';
 
+  if (window.location.hash !== '#chat') {
+    history.pushState({ chatOpen: true }, '', '#chat');
+  }
+
   renderChatList(conversationsCache);
   await loadMessages();
 }
@@ -240,7 +246,17 @@ async function selectChat(wa_id, token) {
 function closeChatMobile() {
   document.getElementById('appContainer').classList.remove('chat-active');
   activeWaId = null;
+  if (window.location.hash === '#chat') {
+    history.back();
+  }
 }
+
+window.onpopstate = function(event) {
+  if (document.getElementById('appContainer').classList.contains('chat-active')) {
+    document.getElementById('appContainer').classList.remove('chat-active');
+    activeWaId = null;
+  }
+};
 
 async function loadMessages() {
   if (!activeWaId) return;
@@ -268,7 +284,9 @@ function renderMessages(messages) {
     } else if (m.type === 'image') {
       body = `<div><img src="${m.content}" class="message-media" onclick="window.open(this.src)"><br><span>${m.caption || ''}</span></div>`;
     } else if (m.type === 'document') {
-      body = `<div><i class="fas fa-file-pdf"></i> <a href="${m.content}" download="${m.filename || 'document.pdf'}" style="color:inherit;">${m.filename || 'Download PDF'}</a></div>`;
+      body = `<div><i class="fas fa-file-pdf"></i> <a href="${m.content}" download="${m.filename || 'document.pdf'}" style="color:inherit; font-weight:bold;">${m.filename || 'Download PDF'}</a></div>`;
+    } else if (m.type === 'audio') {
+      body = `<div><i class="fas fa-microphone" style="color:#00a884; margin-right:5px;"></i> <b>Voice Note</b><br><audio controls src="${m.content}"></audio></div>`;
     }
 
     const time = new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});

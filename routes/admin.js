@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
-const { sendTextMessage, uploadMedia, sendImageMessage, sendDocumentMessage } = require('../services/whatsapp');
+const { sendTextMessage, uploadMedia, sendImageMessage, sendDocumentMessage, sendAudioMessage } = require('../services/whatsapp');
 const { saveMessage, getConversations, getMessages } = require('../utils/db');
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
@@ -56,10 +56,16 @@ router.post('/admin/send-file', checkAuth, upload.single('file'), async (req, re
     if (!to || !file) return res.status(400).json({ error: 'Missing fields' });
 
     const isImage = file.mimetype.startsWith('image/');
+    const isAudio = file.mimetype.startsWith('audio/');
     const mediaId = await uploadMedia(file.buffer, file.mimetype);
 
+    let type = 'document';
     if (isImage) {
       await sendImageMessage(to, mediaId, caption);
+      type = 'image';
+    } else if (isAudio) {
+      await sendAudioMessage(to, mediaId);
+      type = 'audio';
     } else {
       await sendDocumentMessage(to, mediaId, file.originalname);
     }
@@ -68,7 +74,7 @@ router.post('/admin/send-file', checkAuth, upload.single('file'), async (req, re
     saveMessage(to, {
       id: 'admin_' + Date.now(),
       sender: 'admin',
-      type: isImage ? 'image' : 'document',
+      type: type,
       content: base64Data,
       caption: caption || '',
       filename: file.originalname,

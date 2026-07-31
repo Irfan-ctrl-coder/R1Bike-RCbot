@@ -87,15 +87,29 @@ async function sendDocumentMessage(to, mediaId, filename) {
   }
 }
 
-// Fetch media metadata & download stream from Meta
+// Send Voice Note / Audio Message
+async function sendAudioMessage(to, mediaId) {
+  try {
+    await axios.post(API_URL, {
+      messaging_product: 'whatsapp',
+      to: to,
+      type: 'audio',
+      audio: { id: mediaId }
+    }, { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } });
+  } catch (err) {
+    console.error('Error sending audio message:', err.response?.data || err.message);
+    throw err;
+  }
+}
+
+// Download incoming media buffer from Meta
 async function fetchMediaFromMeta(mediaId) {
   try {
     const metaRes = await axios.get(`https://graph.facebook.com/v20.0/${mediaId}`, {
       headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }
     });
     
-    const mediaUrl = metaRes.data.url;
-    const downloadRes = await axios.get(mediaUrl, {
+    const downloadRes = await axios.get(metaRes.data.url, {
       headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
       responseType: 'arraybuffer'
     });
@@ -116,5 +130,6 @@ module.exports = {
   uploadMedia,
   sendImageMessage,
   sendDocumentMessage,
+  sendAudioMessage,
   fetchMediaFromMeta
 };

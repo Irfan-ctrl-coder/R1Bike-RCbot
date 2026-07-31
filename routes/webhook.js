@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { handleIncomingMessage } = require('../utils/stateMachine');
-const { saveMessage, updateConversationMeta } = require('../utils/db');
+const { saveMessage } = require('../utils/db');
 const { fetchMediaFromMeta } = require('../services/whatsapp');
 
 router.get('/webhook', (req, res) => {
@@ -68,6 +68,16 @@ router.post('/webhook', async (req, res) => {
           type: 'document',
           content: base64Data,
           filename: message.document.filename || 'Document.pdf',
+          timestamp: new Date().toISOString()
+        });
+      } else if (message.type === 'audio') {
+        const media = await fetchMediaFromMeta(message.audio.id);
+        const base64Data = media ? `data:${media.mimeType};base64,${media.buffer.toString('base64')}` : null;
+        saveMessage(wa_id, {
+          id: message.id,
+          sender: 'user',
+          type: 'audio',
+          content: base64Data,
           timestamp: new Date().toISOString()
         });
       }

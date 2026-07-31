@@ -1,5 +1,5 @@
-const conversations = {}; // { wa_id: { token, service, name, number, lastMsg, updatedAt } }
-const messages = {};      // { wa_id: [ { id, sender: 'user'|'admin', type: 'text'|'image'|'document', content, caption, timestamp } ] }
+const conversations = {};
+const messages = {};
 
 function saveMessage(wa_id, messageData) {
   if (!messages[wa_id]) {
