@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { handleIncomingMessage } = require('../utils/stateMachine');
 const { saveMessage } = require('../utils/db');
-const { fetchMediaFromMeta } = require('../services/whatsapp');
+const { fetchMediaFromMeta, uploadToCloudinary } = require('../services/whatsapp');
 
 router.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
@@ -17,97 +17,99 @@ router.get('/webhook', (req, res) => {
   }
 });
 
-router.post('/webhook', async (req, res) => {
-  try {
-    const body = req.body;
-    const entry = body.entry?.[0];
-    const change = entry?.changes?.[0];
-    const value = change?.value;
-    const message = value?.messages?.[0];
+router.post('/webhook', (req, res) => {
+  // 1. Immediately acknowledge Meta to prevent duplicate retries
+  res.sendStatus(200);
 
-    if (value?.statuses) {
-      value.statuses.forEach(status => {
-        if (status.status === 'failed') {
-          console.error('[DELIVERY FAILURE REASON]:', JSON.stringify(status.errors, null, 2));
-        }
-      });
-    }
+  // 2. Process event asynchronously in background
+  (async () => {
+    try {
+      const body = req.body;
+      const entry = body.entry?.[0];
+      const change = entry?.changes?.[0];
+      const value = change?.value;
+      const message = value?.messages?.[0];
 
-    if (message) {
-      const wa_id = message.from;
-      let messageText = null;
-      let buttonReplyId = null;
+      if (value?.statuses) {
+        value.statuses.forEach(status => {
+          if (status.status === 'failed') {
+            console.error('[DELIVERY FAILURE REASON]:', JSON.stringify(status.errors, null, 2));
+          }
+        });
+      }
 
-      if (message.type === 'text') {
-        messageText = message.text.body;
-        saveMessage(wa_id, {
-          id: message.id,
-          sender: 'user',
-          type: 'text',
-          content: messageText,
-          timestamp: new Date().toISOString()
-        });
-      } else if (message.type === 'interactive' && message.interactive.type === 'button_reply') {
-        buttonReplyId = message.interactive.button_reply.id;
-        saveMessage(wa_id, {
-          id: message.id,
-          sender: 'user',
-          type: 'text',
-          content: `Selected: ${message.interactive.button_reply.title}`,
-          timestamp: new Date().toISOString()
-        });
-      } else if (message.type === 'image') {
-        const media = await fetchMediaFromMeta(message.image.id);
-        const base64Data = media ? `data:${media.mimeType};base64,${Buffer.from(media.buffer).toString('base64')}` : null;
-        saveMessage(wa_id, {
-          id: message.id,
-          sender: 'user',
-          type: 'image',
-          content: base64Data,
-          caption: message.image.caption || 'Photo',
-          timestamp: new Date().toISOString()
-        });
-      } else if (message.type === 'document') {
-        const media = await fetchMediaFromMeta(message.document.id);
-        const base64Data = media ? `data:${media.mimeType};base64,${Buffer.from(media.buffer).toString('base64')}` : null;
-        saveMessage(wa_id, {
-          id: message.id,
-          sender: 'user',
-          type: 'document',
-          content: base64Data,
-          filename: message.document.filename || 'Document.pdf',
-          timestamp: new Date().toISOString()
-        });
-      } else if (message.type === 'audio' || message.type === 'voice') {
-        const audioId = message.audio?.id || message.voice?.id;
-        if (audioId) {
-          const media = await fetchMediaFromMeta(audioId);
-          if (media && media.buffer) {
-            // Use the original Ogg/Opus bytes directly - no MP3 conversion needed.
-            // WhatsApp voice notes are already Ogg/Opus, and browsers play this
-            // natively without the duration-detection quirks MP3 can introduce.
-            const base64Audio = Buffer.from(media.buffer).toString('base64');
-            const base64Data = `data:${media.mimeType || 'audio/ogg'};base64,${base64Audio}`;
+      if (message) {
+        const wa_id = message.from;
+        let messageText = null;
+        let buttonReplyId = null;
 
+        if (message.type === 'text') {
+          messageText = message.text.body;
+          saveMessage(wa_id, {
+            id: message.id,
+            sender: 'user',
+            type: 'text',
+            content: messageText,
+            timestamp: new Date().toISOString()
+          });
+        } else if (message.type === 'interactive' && message.interactive.type === 'button_reply') {
+          buttonReplyId = message.interactive.button_reply.id;
+          saveMessage(wa_id, {
+            id: message.id,
+            sender: 'user',
+            type: 'text',
+            content: `Selected: ${message.interactive.button_reply.title}`,
+            timestamp: new Date().toISOString()
+          });
+        } else if (message.type === 'image') {
+          const media = await fetchMediaFromMeta(message.image.id);
+          if (media?.buffer) {
+            const imageUrl = await uploadToCloudinary(media.buffer, 'image');
             saveMessage(wa_id, {
               id: message.id,
               sender: 'user',
-              type: 'audio',
-              content: base64Data,
+              type: 'image',
+              content: imageUrl,
+              caption: message.image.caption || 'Photo',
               timestamp: new Date().toISOString()
             });
           }
+        } else if (message.type === 'document') {
+          const media = await fetchMediaFromMeta(message.document.id);
+          if (media?.buffer) {
+            const docUrl = await uploadToCloudinary(media.buffer, 'raw');
+            saveMessage(wa_id, {
+              id: message.id,
+              sender: 'user',
+              type: 'document',
+              content: docUrl,
+              filename: message.document.filename || 'Document.pdf',
+              timestamp: new Date().toISOString()
+            });
+          }
+        } else if (message.type === 'audio' || message.type === 'voice') {
+          const audioId = message.audio?.id || message.voice?.id;
+          if (audioId) {
+            const media = await fetchMediaFromMeta(audioId);
+            if (media?.buffer) {
+              const audioUrl = await uploadToCloudinary(media.buffer, 'video');
+              saveMessage(wa_id, {
+                id: message.id,
+                sender: 'user',
+                type: 'audio',
+                content: audioUrl,
+                timestamp: new Date().toISOString()
+              });
+            }
+          }
         }
+
+        await handleIncomingMessage(wa_id, messageText, buttonReplyId);
       }
-
-      await handleIncomingMessage(wa_id, messageText, buttonReplyId);
+    } catch (err) {
+      console.error('Error handling webhook in background:', err.message);
     }
-
-    res.sendStatus(200);
-  } catch (err) {
-    console.error('Error handling webhook:', err.message);
-    res.sendStatus(200);
-  }
+  })();
 });
 
 module.exports = router;

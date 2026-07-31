@@ -6,13 +6,35 @@ const { Readable, Writable } = require('stream');
 const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
+const cloudinary = require('cloudinary').v2;
 
 ffmpeg.setFfmpegPath(ffmpegPath);
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
 const API_URL = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
 const MEDIA_URL = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/media`;
+
+// Uploads media buffers directly to Cloudinary and returns a public HTTPS URL
+function uploadToCloudinary(fileBuffer, resourceType = 'auto') {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { resource_type: resourceType, folder: 'r1bikes_whatsapp' },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result.secure_url);
+      }
+    );
+    uploadStream.end(fileBuffer);
+  });
+}
 
 // Converts WebM recordings to true WhatsApp Ogg/Opus voice notes
 function convertToOggOpus(inputBuffer) {
@@ -37,43 +59,6 @@ function convertToOggOpus(inputBuffer) {
       .on('error', (err) => reject(err))
       .on('end', () => resolve(Buffer.concat(chunks)))
       .pipe(outputStream);
-  });
-}
-
-// Converts incoming WhatsApp OGG/Opus to clean MP3 WITH EXACT DURATION METADATA
-function convertToMp3(inputBuffer) {
-  return new Promise((resolve, reject) => {
-    const tempId = uuidv4();
-    const tempInput = path.join('/tmp', `${tempId}_in.ogg`);
-    const tempOutput = path.join('/tmp', `${tempId}_out.mp3`);
-
-    // Write buffer to temp file so ffmpeg can analyze full stream duration
-    fs.writeFile(tempInput, inputBuffer, (err) => {
-      if (err) return reject(err);
-
-      ffmpeg(tempInput)
-        .audioCodec('libmp3lame')
-        .audioBitrate(128)
-        .format('mp3')
-        .on('error', (ffmpegErr) => {
-          // Cleanup on failure
-          if (fs.existsSync(tempInput)) fs.unlinkSync(tempInput);
-          if (fs.existsSync(tempOutput)) fs.unlinkSync(tempOutput);
-          reject(ffmpegErr);
-        })
-        .on('end', () => {
-          // Read full converted MP3 file with proper headers
-          fs.readFile(tempOutput, (readErr, convertedBuffer) => {
-            // Cleanup temp files
-            if (fs.existsSync(tempInput)) fs.unlinkSync(tempInput);
-            if (fs.existsSync(tempOutput)) fs.unlinkSync(tempOutput);
-
-            if (readErr) return reject(readErr);
-            resolve(convertedBuffer);
-          });
-        })
-        .save(tempOutput);
-    });
   });
 }
 
@@ -198,8 +183,8 @@ async function fetchMediaFromMeta(mediaId) {
 }
 
 module.exports = {
+  uploadToCloudinary,
   convertToOggOpus,
-  convertToMp3,
   sendTextMessage,
   sendButtonMessage,
   uploadMedia,

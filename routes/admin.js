@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
-const { sendTextMessage, uploadMedia, sendImageMessage, sendDocumentMessage, sendAudioMessage, convertToOggOpus } = require('../services/whatsapp');
+const { sendTextMessage, uploadMedia, sendImageMessage, sendDocumentMessage, sendAudioMessage, convertToOggOpus, uploadToCloudinary } = require('../services/whatsapp');
 const { saveMessage, getConversations, getMessages } = require('../utils/db');
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
@@ -63,18 +63,15 @@ router.post('/admin/send-file', checkAuth, upload.single('file'), async (req, re
     if (isAudio) {
       let convertedBuffer = file.buffer;
 
-      // Convert live browser WebM recordings to real WhatsApp Ogg/Opus
       try {
         convertedBuffer = await convertToOggOpus(file.buffer);
       } catch (convErr) {
         console.error('FFmpeg conversion failed, using raw buffer:', convErr.message);
       }
 
-      // Upload converted buffer to Meta
       const mediaId = await uploadMedia(convertedBuffer, 'audio/ogg; codecs=opus');
       
       try {
-        // Send as Native Voice Note (waveform + play button)
         await sendAudioMessage(to, mediaId);
         type = 'audio';
       } catch (audioErr) {
@@ -82,12 +79,13 @@ router.post('/admin/send-file', checkAuth, upload.single('file'), async (req, re
         await sendDocumentMessage(to, mediaId, 'Voice_Note.opus');
       }
 
-      const base64Data = `data:audio/ogg;base64,${convertedBuffer.toString('base64')}`;
+      const cloudUrl = await uploadToCloudinary(convertedBuffer, 'video');
+
       saveMessage(to, {
         id: 'admin_' + Date.now(),
         sender: 'admin',
         type: type,
-        content: base64Data,
+        content: cloudUrl,
         caption: caption || '',
         filename: file.originalname,
         timestamp: new Date().toISOString()
@@ -98,21 +96,32 @@ router.post('/admin/send-file', checkAuth, upload.single('file'), async (req, re
       const mediaId = await uploadMedia(file.buffer, file.mimetype);
       await sendImageMessage(to, mediaId, caption || '');
       type = 'image';
+      
+      const cloudUrl = await uploadToCloudinary(file.buffer, 'image');
+      saveMessage(to, {
+        id: 'admin_' + Date.now(),
+        sender: 'admin',
+        type: type,
+        content: cloudUrl,
+        caption: caption || '',
+        filename: file.originalname,
+        timestamp: new Date().toISOString()
+      });
     } else {
       const mediaId = await uploadMedia(file.buffer, file.mimetype);
       await sendDocumentMessage(to, mediaId, file.originalname);
-    }
 
-    const base64Data = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
-    saveMessage(to, {
-      id: 'admin_' + Date.now(),
-      sender: 'admin',
-      type: type,
-      content: base64Data,
-      caption: caption || '',
-      filename: file.originalname,
-      timestamp: new Date().toISOString()
-    });
+      const cloudUrl = await uploadToCloudinary(file.buffer, 'raw');
+      saveMessage(to, {
+        id: 'admin_' + Date.now(),
+        sender: 'admin',
+        type: 'document',
+        content: cloudUrl,
+        caption: caption || '',
+        filename: file.originalname,
+        timestamp: new Date().toISOString()
+      });
+    }
 
     res.json({ success: true });
   } catch (err) {
