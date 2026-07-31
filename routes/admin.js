@@ -3,6 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 const { sendTextMessage, uploadMedia, sendImageMessage, sendDocumentMessage } = require('../services/whatsapp');
+const { saveMessage, getConversations, getMessages } = require('../utils/db');
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
@@ -18,11 +19,30 @@ router.get('/admin', (req, res) => {
   res.sendFile('admin.html', { root: './public' });
 });
 
+router.get('/admin/conversations', checkAuth, (req, res) => {
+  res.json({ conversations: getConversations() });
+});
+
+router.get('/admin/messages/:wa_id', checkAuth, (req, res) => {
+  const { wa_id } = req.params;
+  res.json({ messages: getMessages(wa_id) });
+});
+
 router.post('/admin/send-text', checkAuth, async (req, res) => {
   try {
     const { to, message } = req.body;
     if (!to || !message) return res.status(400).json({ error: 'Missing fields' });
+    
     await sendTextMessage(to, message);
+
+    saveMessage(to, {
+      id: 'admin_' + Date.now(),
+      sender: 'admin',
+      type: 'text',
+      content: message,
+      timestamp: new Date().toISOString()
+    });
+
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -43,6 +63,17 @@ router.post('/admin/send-file', checkAuth, upload.single('file'), async (req, re
     } else {
       await sendDocumentMessage(to, mediaId, file.originalname);
     }
+
+    const base64Data = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+    saveMessage(to, {
+      id: 'admin_' + Date.now(),
+      sender: 'admin',
+      type: isImage ? 'image' : 'document',
+      content: base64Data,
+      caption: caption || '',
+      filename: file.originalname,
+      timestamp: new Date().toISOString()
+    });
 
     res.json({ success: true });
   } catch (err) {

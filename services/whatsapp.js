@@ -87,10 +87,34 @@ async function sendDocumentMessage(to, mediaId, filename) {
   }
 }
 
+// Fetch media metadata & download stream from Meta
+async function fetchMediaFromMeta(mediaId) {
+  try {
+    const metaRes = await axios.get(`https://graph.facebook.com/v20.0/${mediaId}`, {
+      headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }
+    });
+    
+    const mediaUrl = metaRes.data.url;
+    const downloadRes = await axios.get(mediaUrl, {
+      headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
+      responseType: 'arraybuffer'
+    });
+
+    return {
+      buffer: Buffer.from(downloadRes.data, 'binary'),
+      mimeType: metaRes.data.mime_type
+    };
+  } catch (err) {
+    console.error('Error downloading media from Meta:', err.response?.data || err.message);
+    return null;
+  }
+}
+
 module.exports = {
   sendTextMessage,
   sendButtonMessage,
   uploadMedia,
   sendImageMessage,
-  sendDocumentMessage
+  sendDocumentMessage,
+  fetchMediaFromMeta
 };

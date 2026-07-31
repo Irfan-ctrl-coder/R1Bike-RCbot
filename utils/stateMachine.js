@@ -1,6 +1,7 @@
 const { sendTextMessage, sendButtonMessage } = require('../services/whatsapp');
-const { generateToken } = require('./tokenGenerator');
+const { generateToken } = require('../services/tokenGenerator');
 const { logOrder } = require('../services/sheets');
+const { updateConversationMeta } = require('./db');
 
 const userStates = {};
 
@@ -57,6 +58,12 @@ async function finalizeOrder(wa_id, state, t) {
     number: state.number,
     vehicleType: state.vehicleType || '',
     dob: state.dob || ''
+  });
+
+  updateConversationMeta(wa_id, {
+    token: state.token,
+    service: state.service,
+    number: state.number
   });
 
   await sendTextMessage(wa_id, t.tokenMessage(state.token, peopleAhead));
@@ -168,7 +175,7 @@ async function handleIncomingMessage(wa_id, messageText, buttonReplyId) {
     }
 
     case 'DONE':
-      console.log(`User ${wa_id} already has token ${state.token}. No auto-reply sent (manual takeover mode).`);
+      console.log(`User ${wa_id} sent message post-token. Logged to inbox.`);
       break;
   }
 }

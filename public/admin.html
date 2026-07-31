@@ -2,120 +2,335 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>R1Bikes - Reply Tool</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>R1Bikes - Live WhatsApp Inbox</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
 <style>
-  body { font-family: Arial, sans-serif; max-width: 500px; margin: 20px auto; padding: 0 15px; background: #f5f5f5; }
-  h2 { color: #075E54; }
-  input, textarea { width: 100%; padding: 10px; margin: 6px 0; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
-  button { background: #25D366; color: white; border: none; padding: 12px; border-radius: 6px; width: 100%; font-size: 16px; cursor: pointer; margin-top: 6px; }
-  button:hover { background: #1ebe5b; }
-  .card { background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-  #status { margin-top: 10px; font-weight: bold; }
-  #passwordScreen { text-align: center; margin-top: 100px; }
+  :root {
+    --bg-main: #eae6df;
+    --panel-bg: #ffffff;
+    --header-bg: #f0f2f5;
+    --border-color: #e9edef;
+    --text-primary: #111b21;
+    --text-secondary: #667781;
+    --msg-in: #ffffff;
+    --msg-out: #d9fdd3;
+    --primary: #00a884;
+    --hover-bg: #f5f6f6;
+  }
+
+  body.dark-theme {
+    --bg-main: #0c1317;
+    --panel-bg: #111b21;
+    --header-bg: #202c33;
+    --border-color: #222d34;
+    --text-primary: #e9edef;
+    --text-secondary: #8696a0;
+    --msg-in: #202c33;
+    --msg-out: #005c4b;
+    --hover-bg: #2a3942;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  body { background: var(--bg-main); height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+
+  /* Login Overlay */
+  #loginOverlay { position: fixed; inset: 0; background: #00a884; display: flex; align-items: center; justify-content: center; z-index: 1000; }
+  .login-box { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 90%; max-width: 360px; text-align: center; }
+  .login-box h2 { color: #00a884; margin-bottom: 20px; }
+  .login-box input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 6px; font-size: 16px; outline: none; }
+  .login-box button { width: 100%; padding: 12px; background: #00a884; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }
+
+  /* App Layout */
+  .app-container { width: 100%; height: 100vh; display: flex; background: var(--panel-bg); }
+  
+  /* Sidebar */
+  .sidebar { width: 350px; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; background: var(--panel-bg); transition: transform 0.3s ease; }
+  .sidebar-header { height: 60px; background: var(--header-bg); padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); }
+  .sidebar-header h3 { color: var(--text-primary); font-size: 18px; }
+  .header-actions i { color: var(--text-secondary); font-size: 18px; margin-left: 15px; cursor: pointer; }
+  
+  .search-box { padding: 8px 12px; background: var(--panel-bg); border-bottom: 1px solid var(--border-color); }
+  .search-wrapper { background: var(--header-bg); border-radius: 8px; padding: 6px 12px; display: flex; align-items: center; }
+  .search-wrapper i { color: var(--text-secondary); margin-right: 10px; }
+  .search-wrapper input { background: transparent; border: none; outline: none; color: var(--text-primary); width: 100%; font-size: 14px; }
+
+  .chat-list { flex: 1; overflow-y: auto; }
+  .chat-item { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border-color); cursor: pointer; transition: 0.2s; }
+  .chat-item:hover, .chat-item.active { background: var(--hover-bg); }
+  .avatar { width: 45px; height: 45px; border-radius: 50%; background: #00a884; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; margin-right: 12px; font-size: 18px; }
+  .chat-info { flex: 1; overflow: hidden; }
+  .chat-top { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .chat-name { font-weight: 600; color: var(--text-primary); font-size: 15px; }
+  .chat-time { font-size: 12px; color: var(--text-secondary); }
+  .chat-preview { font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Main Chat Window */
+  .chat-window { flex: 1; display: flex; flex-direction: column; background: var(--bg-main); position: relative; }
+  .chat-header { height: 60px; background: var(--header-bg); padding: 10px 16px; display: flex; align-items: center; border-bottom: 1px solid var(--border-color); z-index: 10; }
+  .back-btn { display: none; color: var(--text-secondary); font-size: 20px; margin-right: 12px; cursor: pointer; }
+  .active-user-details { display: flex; align-items: center; flex: 1; }
+  .active-user-details h4 { color: var(--text-primary); font-size: 16px; }
+  .active-user-details p { color: var(--text-secondary); font-size: 12px; }
+
+  .message-area { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+  .message-bubble { max-width: 65%; padding: 8px 12px; border-radius: 8px; font-size: 14px; line-height: 1.4; position: relative; word-wrap: break-word; }
+  .message-bubble.inbound { background: var(--msg-in); color: var(--text-primary); align-self: flex-start; border-top-left-radius: 0; }
+  .message-bubble.outbound { background: var(--msg-out); color: var(--text-primary); align-self: flex-end; border-top-right-radius: 0; }
+  .message-time { font-size: 10px; color: var(--text-secondary); text-align: right; margin-top: 4px; }
+  .message-media { max-width: 100%; border-radius: 6px; margin-top: 5px; max-height: 250px; object-fit: cover; cursor: pointer; }
+
+  /* Input Footer */
+  .chat-footer { background: var(--header-bg); padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--border-color); }
+  .chat-footer input[type="text"] { flex: 1; padding: 10px 14px; border-radius: 8px; border: none; outline: none; background: var(--panel-bg); color: var(--text-primary); font-size: 14px; }
+  .attach-btn, .send-btn { background: transparent; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; padding: 5px; }
+  .send-btn { color: #00a884; }
+  #fileInput { display: none; }
+
+  /* Empty State */
+  .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); }
+  .empty-state i { font-size: 60px; margin-bottom: 15px; color: #00a884; }
+
+  /* Responsive Rules */
+  @media (max-width: 768px) {
+    .sidebar { width: 100%; position: absolute; height: 100%; z-index: 20; }
+    .chat-window { width: 100%; position: absolute; height: 100%; z-index: 10; }
+    .app-container.chat-active .sidebar { transform: translateX(-100%); }
+    .back-btn { display: block; }
+  }
 </style>
 </head>
 <body>
 
-<div id="passwordScreen">
-  <h2>R1Bikes Reply Tool</h2>
-  <input type="password" id="passwordInput" placeholder="Enter admin password">
-  <button onclick="checkPassword()">Enter</button>
+<div id="loginOverlay">
+  <div class="login-box">
+    <h2>R1Bikes Reply Tool</h2>
+    <input type="password" id="passwordInput" placeholder="Enter Admin Password">
+    <button onclick="authenticate()">Login</button>
+  </div>
 </div>
 
-<div id="mainScreen" style="display:none;">
-  <h2>R1Bikes - Reply Tool</h2>
-
-  <div class="card">
-    <h3>Send Text Message</h3>
-    <input type="text" id="textTo" placeholder="Customer number (e.g. 916362393439)">
-    <textarea id="textMessage" placeholder="Type your message" rows="3"></textarea>
-    <button onclick="sendText()">Send Text</button>
+<div class="app-container" id="appContainer">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <h3>Chats</h3>
+      <div class="header-actions">
+        <i class="fas fa-adjust" onclick="toggleTheme()" title="Toggle Theme"></i>
+        <i class="fas fa-sync" onclick="loadConversations()" title="Refresh"></i>
+      </div>
+    </div>
+    <div class="search-box">
+      <div class="search-wrapper">
+        <i class="fas fa-search"></i>
+        <input type="text" id="searchInput" placeholder="Search phone or token..." onkeyup="filterChats()">
+      </div>
+    </div>
+    <div class="chat-list" id="chatList"></div>
   </div>
 
-  <div class="card">
-    <h3>Send Image / PDF</h3>
-    <input type="text" id="fileTo" placeholder="Customer number (e.g. 916362393439)">
-    <input type="file" id="fileInput" accept="image/*,.pdf">
-    <input type="text" id="fileCaption" placeholder="Caption (optional, for images)">
-    <button onclick="sendFile()">Send File</button>
-  </div>
+  <!-- Chat Window -->
+  <div class="chat-window">
+    <div class="empty-state" id="emptyState">
+      <i class="fab fa-whatsapp"></i>
+      <h2>R1Bikes WhatsApp Dashboard</h2>
+      <p>Select a customer chat from the sidebar to start messaging</p>
+    </div>
 
-  <div id="status"></div>
+    <div id="activeChatInterface" style="display:none; height: 100%; flex-direction: column;">
+      <div class="chat-header">
+        <i class="fas fa-arrow-left back-btn" onclick="closeChatMobile()"></i>
+        <div class="avatar" id="headerAvatar">U</div>
+        <div class="active-user-details">
+          <div>
+            <h4 id="headerTitle">+91XXXXXXXXXX</h4>
+            <p id="headerSubtitle">Token: Loading...</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="message-area" id="messageArea"></div>
+
+      <div class="chat-footer">
+        <label for="fileInput" class="attach-btn"><i class="fas fa-paperclip"></i></label>
+        <input type="file" id="fileInput" accept="image/*,.pdf" onchange="sendFile()">
+        <input type="text" id="messageInput" placeholder="Type a message..." onkeypress="handleKeyPress(event)">
+        <button class="send-btn" onclick="sendTextMessage()"><i class="fas fa-paperplane"></i></button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
 let ADMIN_PASSWORD = '';
+let activeWaId = null;
+let conversationsCache = [];
 
-function checkPassword() {
-  ADMIN_PASSWORD = document.getElementById('passwordInput').value;
-  document.getElementById('passwordScreen').style.display = 'none';
-  document.getElementById('mainScreen').style.display = 'block';
+function authenticate() {
+  ADMIN_PASSWORD = document.getElementById('passwordInput').value.trim();
+  if (!ADMIN_PASSWORD) return alert('Enter Password');
+  document.getElementById('loginOverlay').style.display = 'none';
+  loadConversations();
+  setInterval(pollUpdates, 3000);
 }
 
-async function sendText() {
-  const to = document.getElementById('textTo').value.trim();
-  const message = document.getElementById('textMessage').value.trim();
-  const status = document.getElementById('status');
+function toggleTheme() {
+  document.body.classList.toggle('dark-theme');
+}
 
-  if (!to || !message) {
-    status.textContent = 'Please fill in both fields.';
-    return;
-  }
-
-  status.textContent = 'Sending...';
+async function loadConversations() {
   try {
-    const res = await fetch('/admin/send-text', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': ADMIN_PASSWORD },
-      body: JSON.stringify({ to, message })
+    const res = await fetch('/admin/conversations', {
+      headers: { 'x-admin-password': ADMIN_PASSWORD }
     });
     const data = await res.json();
-    if (data.success) {
-      status.textContent = '✅ Message sent!';
-      document.getElementById('textMessage').value = '';
-    } else {
-      status.textContent = '❌ Error: ' + (data.error || 'Unknown error');
+    if (data.conversations) {
+      conversationsCache = data.conversations;
+      renderChatList(conversationsCache);
     }
   } catch (err) {
-    status.textContent = '❌ Error: ' + err.message;
+    console.error('Failed loading conversations', err);
+  }
+}
+
+function renderChatList(list) {
+  const container = document.getElementById('chatList');
+  container.innerHTML = '';
+  list.forEach(c => {
+    const item = document.createElement('div');
+    item.className = `chat-item ${activeWaId === c.wa_id ? 'active' : ''}`;
+    item.onclick = () => selectChat(c.wa_id, c.token || 'Pending');
+    item.innerHTML = `
+      <div class="avatar">${c.token ? c.token.substring(0, 3) : 'U'}</div>
+      <div class="chat-info">
+        <div class="chat-top">
+          <span class="chat-name">${c.wa_id}</span>
+          <span class="chat-time">${c.updatedAt ? new Date(c.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</span>
+        </div>
+        <div class="chat-preview">${c.token ? 'Token: ' + c.token : 'New Message'} - ${c.lastMessage || ''}</div>
+      </div>
+    `;
+    container.appendChild(item);
+  });
+}
+
+function filterChats() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const filtered = conversationsCache.filter(c => 
+    c.wa_id.toLowerCase().includes(q) || (c.token && c.token.toLowerCase().includes(q))
+  );
+  renderChatList(filtered);
+}
+
+async function selectChat(wa_id, token) {
+  activeWaId = wa_id;
+  document.getElementById('appContainer').classList.add('chat-active');
+  document.getElementById('emptyState').style.display = 'none';
+  const activeInterface = document.getElementById('activeChatInterface');
+  activeInterface.style.display = 'flex';
+
+  document.getElementById('headerTitle').textContent = `+${wa_id}`;
+  document.getElementById('headerSubtitle').textContent = `Token: ${token}`;
+  document.getElementById('headerAvatar').textContent = token !== 'Pending' ? token.substring(0, 3) : 'U';
+
+  renderChatList(conversationsCache);
+  await loadMessages();
+}
+
+function closeChatMobile() {
+  document.getElementById('appContainer').classList.remove('chat-active');
+  activeWaId = null;
+}
+
+async function loadMessages() {
+  if (!activeWaId) return;
+  try {
+    const res = await fetch(`/admin/messages/${activeWaId}`, {
+      headers: { 'x-admin-password': ADMIN_PASSWORD }
+    });
+    const data = await res.json();
+    renderMessages(data.messages || []);
+  } catch (err) {
+    console.error('Failed loading messages', err);
+  }
+}
+
+function renderMessages(messages) {
+  const area = document.getElementById('messageArea');
+  area.innerHTML = '';
+  messages.forEach(m => {
+    const bubble = document.createElement('div');
+    bubble.className = `message-bubble ${m.sender === 'admin' ? 'outbound' : 'inbound'}`;
+
+    let body = '';
+    if (m.type === 'text') {
+      body = `<div>${m.content}</div>`;
+    } else if (m.type === 'image') {
+      body = `<div><img src="${m.content}" class="message-media" onclick="window.open(this.src)"><br><span>${m.caption || ''}</span></div>`;
+    } else if (m.type === 'document') {
+      body = `<div><i class="fas fa-file-pdf"></i> <a href="${m.content}" download="${m.filename || 'document.pdf'}" style="color:inherit;">${m.filename || 'Download PDF'}</a></div>`;
+    }
+
+    const time = new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    bubble.innerHTML = `${body}<div class="message-time">${time}</div>`;
+    area.appendChild(bubble);
+  });
+  area.scrollTop = area.scrollHeight;
+}
+
+async function sendTextMessage() {
+  const input = document.getElementById('messageInput');
+  const message = input.value.trim();
+  if (!message || !activeWaId) return;
+
+  input.value = '';
+  try {
+    await fetch('/admin/send-text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': ADMIN_PASSWORD },
+      body: JSON.stringify({ to: activeWaId, message })
+    });
+    await loadMessages();
+    loadConversations();
+  } catch (err) {
+    alert('Error sending message: ' + err.message);
   }
 }
 
 async function sendFile() {
-  const to = document.getElementById('fileTo').value.trim();
-  const caption = document.getElementById('fileCaption').value.trim();
   const fileInput = document.getElementById('fileInput');
-  const status = document.getElementById('status');
-
-  if (!to || !fileInput.files[0]) {
-    status.textContent = 'Please select a customer number and a file.';
-    return;
-  }
+  const file = fileInput.files[0];
+  if (!file || !activeWaId) return;
 
   const formData = new FormData();
-  formData.append('to', to);
-  formData.append('caption', caption);
-  formData.append('file', fileInput.files[0]);
+  formData.append('to', activeWaId);
+  formData.append('file', file);
+  formData.append('caption', 'Sent via Dashboard');
 
-  status.textContent = 'Uploading and sending...';
   try {
-    const res = await fetch('/admin/send-file', {
+    await fetch('/admin/send-file', {
       method: 'POST',
       headers: { 'x-admin-password': ADMIN_PASSWORD },
       body: formData
     });
-    const data = await res.json();
-    if (data.success) {
-      status.textContent = '✅ File sent!';
-      fileInput.value = '';
-    } else {
-      status.textContent = '❌ Error: ' + (data.error || 'Unknown error');
-    }
+    fileInput.value = '';
+    await loadMessages();
+    loadConversations();
   } catch (err) {
-    status.textContent = '❌ Error: ' + err.message;
+    alert('Error sending file: ' + err.message);
+  }
+}
+
+function handleKeyPress(e) {
+  if (e.key === 'Enter') sendTextMessage();
+}
+
+function pollUpdates() {
+  if (ADMIN_PASSWORD) {
+    loadConversations();
+    if (activeWaId) loadMessages();
   }
 }
 </script>
-
 </body>
 </html>

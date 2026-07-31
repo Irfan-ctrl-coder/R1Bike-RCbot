@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { handleIncomingMessage } = require('../utils/stateMachine');
+const { saveMessage, updateConversationMeta } = require('../utils/db');
+const { fetchMediaFromMeta } = require('../services/whatsapp');
 
 router.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
@@ -30,11 +32,46 @@ router.post('/webhook', async (req, res) => {
 
       if (message.type === 'text') {
         messageText = message.text.body;
+        saveMessage(wa_id, {
+          id: message.id,
+          sender: 'user',
+          type: 'text',
+          content: messageText,
+          timestamp: new Date().toISOString()
+        });
       } else if (message.type === 'interactive' && message.interactive.type === 'button_reply') {
         buttonReplyId = message.interactive.button_reply.id;
+        saveMessage(wa_id, {
+          id: message.id,
+          sender: 'user',
+          type: 'text',
+          content: `Selected: ${message.interactive.button_reply.title}`,
+          timestamp: new Date().toISOString()
+        });
+      } else if (message.type === 'image') {
+        const media = await fetchMediaFromMeta(message.image.id);
+        const base64Data = media ? `data:${media.mimeType};base64,${media.buffer.toString('base64')}` : null;
+        saveMessage(wa_id, {
+          id: message.id,
+          sender: 'user',
+          type: 'image',
+          content: base64Data,
+          caption: message.image.caption || 'Payment Screenshot / Photo',
+          timestamp: new Date().toISOString()
+        });
+      } else if (message.type === 'document') {
+        const media = await fetchMediaFromMeta(message.document.id);
+        const base64Data = media ? `data:${media.mimeType};base64,${media.buffer.toString('base64')}` : null;
+        saveMessage(wa_id, {
+          id: message.id,
+          sender: 'user',
+          type: 'document',
+          content: base64Data,
+          filename: message.document.filename || 'Document.pdf',
+          timestamp: new Date().toISOString()
+        });
       }
 
-      console.log(`Message from ${wa_id}: text="${messageText}" buttonReply="${buttonReplyId}"`);
       await handleIncomingMessage(wa_id, messageText, buttonReplyId);
     }
 
