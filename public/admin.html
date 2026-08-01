@@ -10,7 +10,7 @@
   :root {
     --bg-main: #eae6df;
     --panel-bg: #ffffff;
-    --header-bg: #f0f2f5;
+    --header-bg: #f0f2f5;   
     --border-color: #e9edef;
     --text-primary: #111b21;
     --text-secondary: #667781;
@@ -64,11 +64,13 @@
   .chat-preview { font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   .chat-window { flex: 1; display: flex; flex-direction: column; background: var(--bg-main); position: relative; }
-  .chat-header { height: 60px; background: var(--header-bg); padding: 10px 16px; display: flex; align-items: center; border-bottom: 1px solid var(--border-color); z-index: 10; }
+  .chat-header { height: 60px; background: var(--header-bg); padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); z-index: 10; }
   .back-btn { display: none; color: var(--text-secondary); font-size: 20px; margin-right: 12px; cursor: pointer; }
   .active-user-details { display: flex; align-items: center; flex: 1; }
   .active-user-details h4 { color: var(--text-primary); font-size: 16px; }
   .active-user-details p { color: var(--text-secondary); font-size: 12px; }
+
+  .delete-chat-btn { background: #d32f2f; color: white; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer; }
 
   .message-area { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
   .message-bubble { max-width: 75%; padding: 8px 12px; border-radius: 8px; font-size: 14px; line-height: 1.4; position: relative; word-wrap: break-word; }
@@ -77,9 +79,13 @@
   .message-time { font-size: 10px; color: var(--text-secondary); text-align: right; margin-top: 4px; }
   .message-media { max-width: 100%; border-radius: 6px; margin-top: 5px; max-height: 250px; object-fit: cover; cursor: pointer; }
 
+  .msg-delete-icon { position: absolute; top: 4px; right: 6px; opacity: 0; transition: 0.2s; cursor: pointer; font-size: 11px; color: var(--text-secondary); }
+  .message-bubble:hover .msg-delete-icon { opacity: 1; }
+  .msg-delete-icon:hover { color: #d32f2f; }
+
   .chat-footer { background: var(--header-bg); padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--border-color); }
   .chat-footer input[type="text"] { flex: 1; padding: 10px 14px; border-radius: 8px; border: none; outline: none; background: var(--panel-bg); color: var(--text-primary); font-size: 14px; }
-  .attach-btn, .mic-btn, .send-btn { background: transparent; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; padding: 5px; }
+  .attach-btn, .gallery-btn, .mic-btn, .send-btn { background: transparent; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; padding: 5px; }
   .send-btn { color: #00a884; }
 
   .recording-bar { display: none; flex: 1; align-items: center; justify-content: space-between; background: var(--panel-bg); padding: 6px 14px; border-radius: 8px; color: #ea4335; font-weight: bold; }
@@ -88,7 +94,7 @@
   .cancel-rec { color: #ea4335; }
   .send-rec { color: #00a884; }
 
-  #fileInput { display: none; }
+  #fileInput, #galleryInput { display: none; }
 
   .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); }
   .empty-state i { font-size: 60px; margin-bottom: 15px; color: #00a884; }
@@ -139,21 +145,29 @@
 
     <div id="activeChatInterface" style="display:none; height: 100%; flex-direction: column;">
       <div class="chat-header">
-        <i class="fas fa-arrow-left back-btn" onclick="closeChatMobile()"></i>
-        <div class="avatar" id="headerAvatar">U</div>
-        <div class="active-user-details">
-          <div>
-            <h4 id="headerTitle">+91XXXXXXXXXX</h4>
-            <p id="headerSubtitle">Token: Loading...</p>
+        <div style="display: flex; align-items: center;">
+          <i class="fas fa-arrow-left back-btn" onclick="closeChatMobile()"></i>
+          <div class="avatar" id="headerAvatar">U</div>
+          <div class="active-user-details">
+            <div>
+              <h4 id="headerTitle">+91XXXXXXXXXX</h4>
+              <p id="headerSubtitle">Token: Loading...</p>
+            </div>
           </div>
         </div>
+        <button class="delete-chat-btn" onclick="deleteCurrentChat()">Delete Chat</button>
       </div>
 
       <div class="message-area" id="messageArea"></div>
 
       <div class="chat-footer">
-        <label for="fileInput" class="attach-btn" title="Attach Image, PDF, or Audio"><i class="fas fa-paperclip"></i></label>
-        <input type="file" id="fileInput" accept="image/*,.pdf,audio/*" onchange="sendFile()">
+        <!-- Direct Phone Gallery Access Button -->
+        <label for="galleryInput" class="gallery-btn" title="Open Phone Gallery"><i class="fas fa-image"></i></label>
+        <input type="file" id="galleryInput" accept="image/*" onchange="sendFile('galleryInput')">
+
+        <!-- Document / Audio Attachment -->
+        <label for="fileInput" class="attach-btn" title="Attach Document or Audio"><i class="fas fa-paperclip"></i></label>
+        <input type="file" id="fileInput" accept=".pdf,.doc,.docx,audio/*" onchange="sendFile('fileInput')">
 
         <button class="mic-btn" id="micBtn" onclick="toggleRecording()" title="Record Voice Note"><i class="fas fa-microphone"></i></button>
 
@@ -182,7 +196,7 @@ let mediaRecorder = null;
 let audioChunks = [];
 let recInterval = null;
 let recSeconds = 0;
-let pendingLocalSends = []; // text messages shown optimistically, waiting for server confirmation
+let pendingLocalSends = [];
 
 window.addEventListener('DOMContentLoaded', () => {
   if (ADMIN_PASSWORD) {
@@ -210,26 +224,39 @@ function setupWebSockets() {
   if (socket) return;
   socket = io();
 
-  // Instant update when ANY message (user or admin) arrives
   socket.on('new_message', (data) => {
-    loadConversations(); // refresh list snippet (unread badges, previews)
+    loadConversations();
     if (activeWaId && data.wa_id === activeWaId) {
       if (data.message.sender === 'admin' && data.message.type === 'text') {
         const idx = pendingLocalSends.findIndex(p => p.content === data.message.content);
         if (idx !== -1) {
           const { localId } = pendingLocalSends[idx];
           pendingLocalSends.splice(idx, 1);
-          // Upgrade the bubble we already showed instantly - attach the real
-          // wamid and flip the clock icon to a tick, instead of duplicating it.
           upgradeLocalMessage(localId, data.message.wamid, data.message.status || 'sent');
           return;
         }
       }
-      appendSingleMessage(data.message); // instantly render inside active chat window
+      appendSingleMessage(data.message);
     }
   });
 
-  // Delivered / read tick updates for messages we sent
+  socket.on('message_deleted', (data) => {
+    if (activeWaId && data.wa_id === activeWaId) {
+      const el = document.querySelector(`[data-local-id="${data.msg_id}"]`) || document.querySelector(`[data-wamid="${data.msg_id}"]`);
+      if (el) el.remove();
+    }
+    loadConversations();
+  });
+
+  socket.on('conversation_deleted', (data) => {
+    if (activeWaId && data.wa_id === data.wa_id) {
+      activeWaId = null;
+      document.getElementById('activeChatInterface').style.display = 'none';
+      document.getElementById('emptyState').style.display = 'flex';
+    }
+    loadConversations();
+  });
+
   socket.on('status_update', (data) => {
     const el = document.querySelector(`[data-wamid="${data.wamid}"]`);
     if (el) {
@@ -328,7 +355,7 @@ async function selectChat(wa_id, token) {
 
   renderChatList(conversationsCache);
   await loadMessages();
-  loadConversations(); // refresh sidebar so the unread badge clears now that this chat is marked read
+  loadConversations();
 }
 
 function closeChatMobile() {
@@ -370,7 +397,6 @@ function tickIconHtml(status) {
   if (status === 'delivered') return '<i class="fas fa-check-double" style="color:#999; font-size:12px;"></i>';
   if (status === 'read') return '<i class="fas fa-check-double" style="color:#53bdeb; font-size:12px;"></i>';
   if (status === 'failed') return '<i class="fas fa-exclamation-circle" style="color:#e74c3c; font-size:12px;" title="Failed to send"></i>';
-  // default / 'sent'
   return '<i class="fas fa-check" style="color:#999; font-size:12px;"></i>';
 }
 
@@ -378,6 +404,7 @@ function appendSingleMessage(m) {
   const area = document.getElementById('messageArea');
   const bubble = document.createElement('div');
   bubble.className = `message-bubble ${m.sender === 'admin' ? 'outbound' : 'inbound'}`;
+  const msgId = m.id || m.wamid;
   if (m.id) bubble.setAttribute('data-local-id', m.id);
   if (m.wamid) bubble.setAttribute('data-wamid', m.wamid);
 
@@ -405,20 +432,46 @@ function appendSingleMessage(m) {
   const tickHtml = m.sender === 'admin'
     ? `<span class="tick-status" style="margin-left:5px;">${tickIconHtml(m.status)}</span>`
     : '';
-  bubble.innerHTML = `${body}<div class="message-time">${time}${tickHtml}</div>`;
+
+  bubble.innerHTML = `
+    <i class="fas fa-trash msg-delete-icon" onclick="deleteMessage('${msgId}')" title="Delete message"></i>
+    ${body}
+    <div class="message-time">${time}${tickHtml}</div>
+  `;
   area.appendChild(bubble);
   area.scrollTop = area.scrollHeight;
 }
 
-// Called when the real server confirmation arrives - upgrades the optimistic
-// "sending" clock icon to a real tick, and attaches the wamid so later
-// delivered/read status updates from Meta know which bubble to update.
 function upgradeLocalMessage(localId, wamid, status) {
   const el = document.querySelector(`[data-local-id="${localId}"]`);
   if (!el) return;
   if (wamid) el.setAttribute('data-wamid', wamid);
   const tickEl = el.querySelector('.tick-status');
   if (tickEl) tickEl.innerHTML = tickIconHtml(status || 'sent');
+}
+
+async function deleteMessage(msgId) {
+  if (!confirm('Delete this message from panel?')) return;
+  try {
+    await fetch(`/admin/messages/${activeWaId}/${msgId}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-password': ADMIN_PASSWORD }
+    });
+  } catch (err) {
+    alert('Error deleting message: ' + err.message);
+  }
+}
+
+async function deleteCurrentChat() {
+  if (!confirm(`Are you sure you want to delete the entire chat with +${activeWaId}?`)) return;
+  try {
+    await fetch(`/admin/conversations/${activeWaId}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-password': ADMIN_PASSWORD }
+    });
+  } catch (err) {
+    alert('Error deleting chat: ' + err.message);
+  }
 }
 
 async function toggleRecording() {
@@ -502,11 +555,6 @@ function stopAndSendRecording() {
 
 function showUploadingIndicator() {
   const area = document.getElementById('messageArea');
-  const bubble = document.createElement('div');
-  bubble.id = 'uploadingIndicator';
-  bubble.className = 'message-bubble outbound';
-  bubble.innerHTML = `<div><i class="fas fa-spinner fa-spin"></i> Sending...</div>`;
-  area.appendChild(bubble);
   area.scrollTop = area.scrollHeight;
 }
 
@@ -524,8 +572,6 @@ async function sendTextMessage() {
 
   const localId = 'local_' + Date.now();
 
-  // Show it instantly with a clock icon instead of waiting for the WhatsApp
-  // API round trip - that wait was the main reason the panel felt slow to use.
   appendSingleMessage({
     id: localId,
     sender: 'admin',
@@ -548,8 +594,8 @@ async function sendTextMessage() {
   }
 }
 
-async function sendFile() {
-  const fileInput = document.getElementById('fileInput');
+async function sendFile(inputId) {
+  const fileInput = document.getElementById(inputId);
   const file = fileInput.files[0];
   if (!file || !activeWaId) return;
 
