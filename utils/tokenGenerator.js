@@ -1,4 +1,4 @@
-const { getDoc, getTodayDateString } = require('./googleSheetClient');
+const { getDoc, getTodayDateString } = require('../services/sheets');
 
 async function generateToken() {
   try {
