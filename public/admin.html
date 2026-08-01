@@ -6,85 +6,108 @@
   <title>R1 Bikes Admin Dashboard</title>
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    body { display: flex; height: 100vh; background-color: #f0f2f5; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { display: flex; height: 100vh; background-color: #d1d7db; overflow: hidden; }
+
+    /* App Wrapper */
+    .app-container { display: flex; width: 100%; height: 100%; max-width: 1600px; margin: 0 auto; background: #fff; box-shadow: 0 6px 18px rgba(0,0,0,0.1); }
+
+    /* Left Sidebar */
+    .sidebar { width: 30%; min-width: 340px; max-width: 450px; background: #ffffff; border-right: 1px solid #e9edef; display: flex; flex-direction: column; }
     
-    /* Sidebar */
-    .sidebar { width: 320px; background: #ffffff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
-    .sidebar-header { padding: 15px; background: #075e54; color: #ffffff; font-size: 18px; font-weight: bold; }
-    .auth-box { padding: 10px 15px; background: #e8f5e9; border-bottom: 1px solid #c8e6c9; display: flex; gap: 8px; }
-    .auth-box input { flex: 1; padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; }
-    .auth-box button { padding: 6px 12px; background: #128c7e; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    .sidebar-header { height: 60px; background: #f0f2f5; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #e9edef; }
+    .sidebar-header h2 { font-size: 18px; color: #111b21; font-weight: 600; }
     
+    .auth-box { padding: 8px 12px; background: #f6f8fa; border-bottom: 1px solid #e9edef; display: flex; gap: 8px; }
+    .auth-box input { flex: 1; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; outline: none; }
+    .auth-box button { padding: 8px 14px; background: #00a884; color: #fff; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
+
     .conversation-list { flex: 1; overflow-y: auto; }
-    .conv-item { padding: 12px 15px; border-bottom: 1px solid #f0f0f0; cursor: pointer; display: flex; flex-direction: column; gap: 4px; position: relative; }
-    .conv-item:hover, .conv-item.active { background: #f5f6f6; }
-    .conv-header { display: flex; justify-content: space-between; font-weight: bold; color: #333; }
-    .conv-preview { font-size: 13px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .badge { background: #25d366; color: white; border-radius: 50%; padding: 2px 7px; font-size: 11px; font-weight: bold; align-self: flex-end; }
+    .conv-item { padding: 12px 16px; border-bottom: 1px solid #f0f2f5; cursor: pointer; display: flex; flex-direction: column; gap: 4px; transition: background 0.15s ease; }
+    .conv-item:hover { background: #f5f6f6; }
+    .conv-item.active { background: #f0f2f5; }
     
-    /* Chat Area */
-    .chat-container { flex: 1; display: flex; flex-direction: column; background: #efeae2; }
-    .chat-header { padding: 12px 20px; background: #f0f2f5; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; }
-    .chat-header h3 { color: #333; font-size: 16px; }
-    .btn-delete-chat { background: #d32f2f; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+    .conv-header { display: flex; justify-content: space-between; align-items: center; }
+    .conv-title { font-weight: 600; color: #111b21; font-size: 15px; }
+    .conv-preview { font-size: 13px; color: #667781; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 85%; }
+    .badge { background: #25d366; color: white; border-radius: 12px; padding: 2px 8px; font-size: 11px; font-weight: bold; }
+
+    /* Right Chat Main Panel */
+    .chat-container { flex: 1; display: flex; flex-direction: column; background: #efeae2; position: relative; }
+    .chat-container::before { content: ""; position: absolute; top:0; left:0; right:0; bottom:0; opacity: 0.08; background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); pointer-events: none; }
+
+    .chat-header { height: 60px; background: #f0f2f5; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e9edef; z-index: 1; }
+    .chat-header h3 { color: #111b21; font-size: 16px; font-weight: 600; }
+    .btn-delete-chat { background: #ea0038; color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; }
+
+    /* Messages Display Box */
+    .messages-box { flex: 1; padding: 20px 5%; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; z-index: 1; }
     
-    .messages-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-    .message { max-width: 65%; padding: 8px 12px; border-radius: 7.5px; position: relative; font-size: 14px; line-height: 1.4; display: flex; flex-direction: column; }
-    .message.user { background: #ffffff; align-self: flex-start; border-top-left-radius: 0; }
-    .message.admin { background: #d9fdd3; align-self: flex-end; border-top-right-radius: 0; }
-    .msg-time { font-size: 10px; color: #888; align-self: flex-end; margin-top: 4px; }
-    .msg-actions { position: absolute; top: 4px; right: 4px; opacity: 0; transition: opacity 0.2s; cursor: pointer; }
+    .message { max-width: 60%; padding: 8px 12px; border-radius: 8px; position: relative; font-size: 14.2px; line-height: 1.4; word-wrap: break-word; box-shadow: 0 1px 0.5px rgba(11,20,26,0.13); }
+    .message.user { background: #ffffff; align-self: flex-start; border-top-left-radius: 0; color: #111b21; }
+    .message.admin { background: #d9fdd3; align-self: flex-end; border-top-right-radius: 0; color: #111b21; }
+
+    .msg-content { margin-right: 15px; }
+    .msg-time { font-size: 10.5px; color: #667781; text-align: right; margin-top: 3px; }
+    
+    /* Delete Hover Action */
+    .msg-actions { position: absolute; top: 4px; right: 6px; opacity: 0; transition: opacity 0.2s; cursor: pointer; }
     .message:hover .msg-actions { opacity: 1; }
-    .delete-msg-btn { font-size: 12px; color: #888; }
-    .delete-msg-btn:hover { color: #d32f2f; }
+    .delete-msg-btn { font-size: 12px; filter: grayscale(1); }
+    .delete-msg-btn:hover { filter: grayscale(0); transform: scale(1.1); }
 
     /* Media Styling */
-    .message img { max-width: 100%; max-height: 250px; border-radius: 5px; margin-bottom: 4px; }
-    .message audio { width: 220px; margin-top: 4px; }
+    .message img { max-width: 100%; max-height: 280px; border-radius: 6px; margin-top: 4px; display: block; }
+    .message audio { width: 250px; margin-top: 6px; }
+    .message a { color: #027eb5; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
 
-    /* Input Footer */
-    .chat-footer { padding: 10px 15px; background: #f0f2f5; display: flex; gap: 8px; align-items: center; border-top: 1px solid #e0e0e0; }
-    .chat-footer input[type="text"] { flex: 1; padding: 10px 14px; border: 1px solid #ccc; border-radius: 8px; outline: none; }
-    .chat-footer button { padding: 10px 16px; background: #128c7e; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
-    
-    /* Media Picker Buttons */
-    .media-btn { background: none; border: none; font-size: 20px; cursor: pointer; padding: 0 4px; }
+    /* Footer Input Area */
+    .chat-footer { padding: 10px 16px; background: #f0f2f5; display: flex; gap: 10px; align-items: center; z-index: 1; border-top: 1px solid #e9edef; }
+    .chat-footer input[type="text"] { flex: 1; padding: 11px 16px; border: 1px solid #fff; border-radius: 8px; outline: none; font-size: 14.5px; background: #ffffff; }
+    .chat-footer button.send-btn { padding: 10px 18px; background: #00a884; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; }
+
+    /* Gallery / Media Icon Buttons */
+    .media-btn { background: none; border: none; font-size: 22px; cursor: pointer; opacity: 0.7; transition: opacity 0.2s; padding: 0 4px; }
+    .media-btn:hover { opacity: 1; }
     .hidden-input { display: none; }
   </style>
 </head>
 <body>
 
-  <!-- Sidebar -->
-  <div class="sidebar">
-    <div class="sidebar-header">R1 Bikes Chats</div>
-    <div class="auth-box">
-      <input type="password" id="adminPassword" placeholder="Admin Password">
-      <button onclick="saveAuth()">Login</button>
-    </div>
-    <div class="conversation-list" id="convList"></div>
-  </div>
-
-  <!-- Chat Area -->
-  <div class="chat-container">
-    <div class="chat-header" id="chatHeader">
-      <h3 id="currentChatTitle">Select a chat to begin</h3>
-      <button class="btn-delete-chat" id="deleteChatBtn" style="display:none;" onclick="deleteCurrentChat()">Delete Chat</button>
+  <div class="app-container">
+    <!-- Left Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <h2>R1 Bikes Dashboard</h2>
+      </div>
+      <div class="auth-box">
+        <input type="password" id="adminPassword" placeholder="Admin Password">
+        <button onclick="saveAuth()">Login</button>
+      </div>
+      <div class="conversation-list" id="convList"></div>
     </div>
 
-    <div class="messages-box" id="messagesBox"></div>
+    <!-- Right Chat Main Area -->
+    <div class="chat-container">
+      <div class="chat-header" id="chatHeader">
+        <h3 id="currentChatTitle">Select a conversation</h3>
+        <button class="btn-delete-chat" id="deleteChatBtn" style="display:none;" onclick="deleteCurrentChat()">Delete Entire Chat</button>
+      </div>
 
-    <div class="chat-footer" id="chatFooter" style="display:none;">
-      <!-- Direct Gallery Picker -->
-      <button class="media-btn" title="Send Image (Gallery)" onclick="document.getElementById('imageInput').click()">🖼️</button>
-      <input type="file" id="imageInput" class="hidden-input" accept="image/*" onchange="sendFile(this.files[0])">
+      <div class="messages-box" id="messagesBox"></div>
 
-      <!-- Document Picker -->
-      <button class="media-btn" title="Send Document" onclick="document.getElementById('docInput').click()">📄</button>
-      <input type="file" id="docInput" class="hidden-input" accept=".pdf,.doc,.docx,.txt" onchange="sendFile(this.files[0])">
+      <div class="chat-footer" id="chatFooter" style="display:none;">
+        <!-- Direct Gallery Access -->
+        <button class="media-btn" title="Send Photo (Gallery)" onclick="document.getElementById('imageInput').click()">📷</button>
+        <input type="file" id="imageInput" class="hidden-input" accept="image/*" onchange="sendFile(this.files[0])">
 
-      <input type="text" id="messageInput" placeholder="Type a message..." onkeypress="handleKeyPress(event)">
-      <button onclick="sendTextMessage()">Send</button>
+        <!-- Document Picker -->
+        <button class="media-btn" title="Send Document" onclick="document.getElementById('docInput').click()">📎</button>
+        <input type="file" id="docInput" class="hidden-input" accept=".pdf,.doc,.docx,.txt" onchange="sendFile(this.files[0])">
+
+        <input type="text" id="messageInput" placeholder="Type a message..." onkeypress="handleKeyPress(event)">
+        <button class="send-btn" onclick="sendTextMessage()">Send</button>
+      </div>
     </div>
   </div>
 
@@ -116,7 +139,7 @@
       if (data.wa_id === activeWaId) {
         activeWaId = null;
         document.getElementById('messagesBox').innerHTML = '';
-        document.getElementById('currentChatTitle').innerText = 'Select a chat to begin';
+        document.getElementById('currentChatTitle').innerText = 'Select a conversation';
         document.getElementById('chatFooter').style.display = 'none';
         document.getElementById('deleteChatBtn').style.display = 'none';
       }
@@ -146,7 +169,7 @@
           div.onclick = () => openChat(c.wa_id);
           div.innerHTML = `
             <div class="conv-header">
-              <span>+${c.wa_id}</span>
+              <span class="conv-title">+${c.wa_id}</span>
               ${c.unreadCount ? `<span class="badge">${c.unreadCount}</span>` : ''}
             </div>
             <div class="conv-preview">${c.lastMessage || 'No messages'}</div>
@@ -160,7 +183,7 @@
 
     async function openChat(wa_id) {
       activeWaId = wa_id;
-      document.getElementById('currentChatTitle').innerText = `Chatting with +${wa_id}`;
+      document.getElementById('currentChatTitle').innerText = `+${wa_id}`;
       document.getElementById('chatFooter').style.display = 'flex';
       document.getElementById('deleteChatBtn').style.display = 'block';
       loadConversations();
@@ -187,13 +210,13 @@
 
       let contentHtml = '';
       if (msg.type === 'text') {
-        contentHtml = `<div>${escapeHtml(msg.content)}</div>`;
+        contentHtml = `<div class="msg-content">${escapeHtml(msg.content)}</div>`;
       } else if (msg.type === 'image') {
-        contentHtml = `<img src="${msg.content}" alt="Image"><div>${escapeHtml(msg.caption || '')}</div>`;
+        contentHtml = `<div class="msg-content"><img src="${msg.content}" alt="Photo"><div>${escapeHtml(msg.caption || '')}</div></div>`;
       } else if (msg.type === 'audio') {
-        contentHtml = `<audio controls src="${msg.content}"></audio>`;
+        contentHtml = `<div class="msg-content"><audio controls src="${msg.content}"></audio></div>`;
       } else if (msg.type === 'document') {
-        contentHtml = `<a href="${msg.content}" target="_blank">📄 ${escapeHtml(msg.filename || 'Document')}</a>`;
+        contentHtml = `<div class="msg-content"><a href="${msg.content}" target="_blank">📄 ${escapeHtml(msg.filename || 'Document')}</a></div>`;
       }
 
       const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -260,7 +283,7 @@
     }
 
     async function deleteCurrentChat() {
-      if (!confirm(`Are you sure you want to delete the entire chat for +${activeWaId}?`)) return;
+      if (!confirm(`Delete entire chat for +${activeWaId}?`)) return;
       try {
         await fetch(`/admin/conversations/${activeWaId}`, {
           method: 'DELETE',
