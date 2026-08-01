@@ -47,6 +47,8 @@ function updateConversationMeta(wa_id, meta) {
   Object.assign(conversations[wa_id], meta);
 }
 
+// Finds a message by its WhatsApp message ID (wamid) across all chats and
+// updates its delivery status - used when Meta sends a status webhook event.
 function updateMessageStatusByWamid(wamid, status) {
   for (const wa_id in messages) {
     const msg = messages[wa_id].find(m => m.wamid === wamid);
@@ -56,28 +58,6 @@ function updateMessageStatusByWamid(wamid, status) {
     }
   }
   return null;
-}
-
-// Delete single message from DB
-function deleteMessage(wa_id, messageId) {
-  if (messages[wa_id]) {
-    messages[wa_id] = messages[wa_id].filter(msg => msg.id !== messageId && msg.wamid !== messageId);
-    if (messages[wa_id].length > 0) {
-      const last = messages[wa_id][messages[wa_id].length - 1];
-      conversations[wa_id].lastMessage = last.type === 'text' ? last.content : `[${last.type.toUpperCase()}]`;
-    } else if (conversations[wa_id]) {
-      conversations[wa_id].lastMessage = '';
-    }
-    return true;
-  }
-  return false;
-}
-
-// Delete full conversation from DB
-function deleteConversation(wa_id) {
-  delete conversations[wa_id];
-  delete messages[wa_id];
-  return true;
 }
 
 function getConversations() {
@@ -93,8 +73,6 @@ module.exports = {
   updateConversationMeta,
   updateMessageStatusByWamid,
   markRead,
-  deleteMessage,
-  deleteConversation,
   getConversations,
   getMessages
 };

@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 const { sendTextMessage, uploadMedia, sendImageMessage, sendDocumentMessage, sendAudioMessage, convertToOggOpus, uploadToCloudinary } = require('../services/whatsapp');
-const { saveMessage, getConversations, getMessages, markRead, deleteMessage, deleteConversation } = require('../utils/db');
+const { saveMessage, getConversations, getMessages, markRead } = require('../utils/db');
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
@@ -135,30 +135,6 @@ router.post('/admin/send-file', checkAuth, upload.single('file'), async (req, re
   } catch (err) {
     console.error('Send file error:', err.response?.data || err.message);
     res.status(500).json({ error: err.message });
-  }
-});
-
-// DELETE SINGLE MESSAGE
-router.delete('/admin/messages/:wa_id/:msg_id', checkAuth, (req, res) => {
-  const { wa_id, msg_id } = req.params;
-  const success = deleteMessage(wa_id, msg_id);
-  if (success) {
-    req.io.emit('message_deleted', { wa_id, msg_id });
-    res.json({ success: true });
-  } else {
-    res.status(404).json({ error: 'Message not found' });
-  }
-});
-
-// DELETE FULL CHAT
-router.delete('/admin/conversations/:wa_id', checkAuth, (req, res) => {
-  const { wa_id } = req.params;
-  const success = deleteConversation(wa_id);
-  if (success) {
-    req.io.emit('conversation_deleted', { wa_id });
-    res.json({ success: true });
-  } else {
-    res.status(404).json({ error: 'Conversation not found' });
   }
 });
 
