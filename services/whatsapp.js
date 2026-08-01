@@ -3,14 +3,10 @@ const FormData = require('form-data');
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 const { Readable, Writable } = require('stream');
-const fs = require('fs');
-const path = require('path');
-const { v4: uuidv4 } = require('uuid');
 const cloudinary = require('cloudinary').v2;
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
-// Configure Cloudinary
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -22,7 +18,6 @@ const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
 const API_URL = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
 const MEDIA_URL = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/media`;
 
-// Uploads media buffers directly to Cloudinary and returns a public HTTPS URL
 function uploadToCloudinary(fileBuffer, resourceType = 'auto') {
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
@@ -36,7 +31,6 @@ function uploadToCloudinary(fileBuffer, resourceType = 'auto') {
   });
 }
 
-// Converts WebM recordings to true WhatsApp Ogg/Opus voice notes
 function convertToOggOpus(inputBuffer) {
   return new Promise((resolve, reject) => {
     const inputStream = new Readable();
@@ -64,12 +58,13 @@ function convertToOggOpus(inputBuffer) {
 
 async function sendTextMessage(to, text) {
   try {
-    await axios.post(API_URL, {
+    const res = await axios.post(API_URL, {
       messaging_product: 'whatsapp',
       to: to,
       type: 'text',
       text: { body: text }
     }, { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } });
+    return res.data.messages[0].id; // wamid
   } catch (err) {
     console.error('Error sending text message:', err.response?.data || err.message);
     throw err;
@@ -78,7 +73,7 @@ async function sendTextMessage(to, text) {
 
 async function sendButtonMessage(to, bodyText, buttons) {
   try {
-    await axios.post(API_URL, {
+    const res = await axios.post(API_URL, {
       messaging_product: 'whatsapp',
       to: to,
       type: 'interactive',
@@ -93,6 +88,7 @@ async function sendButtonMessage(to, bodyText, buttons) {
         }
       }
     }, { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } });
+    return res.data.messages[0].id;
   } catch (err) {
     console.error('Error sending button message:', err.response?.data || err.message);
     throw err;
@@ -126,7 +122,8 @@ async function sendImageMessage(to, mediaId, caption) {
     if (caption && caption.trim()) {
       payload.image.caption = caption.trim();
     }
-    await axios.post(API_URL, payload, { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } });
+    const res = await axios.post(API_URL, payload, { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } });
+    return res.data.messages[0].id;
   } catch (err) {
     console.error('Error sending image:', err.response?.data || err.message);
     throw err;
@@ -135,12 +132,13 @@ async function sendImageMessage(to, mediaId, caption) {
 
 async function sendDocumentMessage(to, mediaId, filename) {
   try {
-    await axios.post(API_URL, {
+    const res = await axios.post(API_URL, {
       messaging_product: 'whatsapp',
       to: to,
       type: 'document',
       document: { id: mediaId, filename: filename || 'document.pdf' }
     }, { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } });
+    return res.data.messages[0].id;
   } catch (err) {
     console.error('Error sending document:', err.response?.data || err.message);
     throw err;
@@ -149,12 +147,13 @@ async function sendDocumentMessage(to, mediaId, filename) {
 
 async function sendAudioMessage(to, mediaId) {
   try {
-    await axios.post(API_URL, {
+    const res = await axios.post(API_URL, {
       messaging_product: 'whatsapp',
       to: to,
       type: 'audio',
       audio: { id: mediaId }
     }, { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } });
+    return res.data.messages[0].id;
   } catch (err) {
     console.error('Error sending audio message:', err.response?.data || err.message);
     throw err;
@@ -166,7 +165,7 @@ async function fetchMediaFromMeta(mediaId) {
     const metaRes = await axios.get(`https://graph.facebook.com/v20.0/${mediaId}`, {
       headers: { Authorization: `Bearer ${ACCESS_TOKEN}` }
     });
-    
+
     const downloadRes = await axios.get(metaRes.data.url, {
       headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
       responseType: 'arraybuffer'

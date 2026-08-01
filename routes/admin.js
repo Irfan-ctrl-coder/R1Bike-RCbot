@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 const { sendTextMessage, uploadMedia, sendImageMessage, sendDocumentMessage, sendAudioMessage, convertToOggOpus, uploadToCloudinary } = require('../services/whatsapp');
-const { saveMessage, getConversations, getMessages } = require('../utils/db');
+const { saveMessage, getConversations, getMessages, markRead } = require('../utils/db');
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
@@ -25,6 +25,7 @@ router.get('/admin/conversations', checkAuth, (req, res) => {
 
 router.get('/admin/messages/:wa_id', checkAuth, (req, res) => {
   const { wa_id } = req.params;
+  markRead(wa_id); // opening the chat clears its unread badge
   res.json({ messages: getMessages(wa_id) });
 });
 
@@ -32,21 +33,23 @@ router.post('/admin/send-text', checkAuth, async (req, res) => {
   try {
     const { to, message } = req.body;
     if (!to || !message) return res.status(400).json({ error: 'Missing fields' });
-    
-    await sendTextMessage(to, message);
+
+    const wamid = await sendTextMessage(to, message);
 
     const savedMsg = {
       id: 'admin_' + Date.now(),
+      wamid: wamid,
       sender: 'admin',
       type: 'text',
       content: message,
+      status: 'sent',
       timestamp: new Date().toISOString()
     };
 
     saveMessage(to, savedMsg);
     req.io.emit('new_message', { wa_id: to, message: savedMsg });
 
-    res.json({ success: true });
+    res.json({ success: true, wamid });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -62,50 +65,77 @@ router.post('/admin/send-file', checkAuth, upload.single('file'), async (req, re
     const isAudio = file.mimetype.startsWith('audio/') || isLiveVoice === 'true';
     let type = 'document';
     let cloudUrl = '';
+    let wamid = null;
 
     if (isAudio) {
+      const originalBuffer = file.buffer; // higher-quality copy, for panel playback only
+
       let convertedBuffer = file.buffer;
       try {
-        convertedBuffer = await convertToOggOpus(file.buffer);
+        convertedBuffer = await convertToOggOpus(file.buffer); // WhatsApp-required 16kHz mono
       } catch (convErr) {
         console.error('FFmpeg conversion failed:', convErr.message);
       }
 
       const mediaId = await uploadMedia(convertedBuffer, 'audio/ogg; codecs=opus');
-      try {
-        await sendAudioMessage(to, mediaId);
-        type = 'audio';
-      } catch (audioErr) {
-        await sendDocumentMessage(to, mediaId, 'Voice_Note.opus');
+
+      const [sendResult, cloudResult] = await Promise.allSettled([
+        sendAudioMessage(to, mediaId),
+        uploadToCloudinary(originalBuffer, 'video')
+      ]);
+
+      if (sendResult.status === 'fulfilled') {
+        wamid = sendResult.value;
+      } else {
+        console.error('Native audio send failed, falling back to document:', sendResult.reason?.message);
+        wamid = await sendDocumentMessage(to, mediaId, 'Voice_Note.opus');
       }
 
-      cloudUrl = await uploadToCloudinary(convertedBuffer, 'video');
+      type = 'audio';
+      cloudUrl = cloudResult.status === 'fulfilled' ? cloudResult.value : '';
+
     } else if (isImage) {
       const mediaId = await uploadMedia(file.buffer, file.mimetype);
-      await sendImageMessage(to, mediaId, caption || '');
+
+      const [sendResult, cloudResult] = await Promise.allSettled([
+        sendImageMessage(to, mediaId, caption || ''),
+        uploadToCloudinary(file.buffer, 'image')
+      ]);
+
+      wamid = sendResult.status === 'fulfilled' ? sendResult.value : null;
       type = 'image';
-      cloudUrl = await uploadToCloudinary(file.buffer, 'image');
+      cloudUrl = cloudResult.status === 'fulfilled' ? cloudResult.value : '';
+
     } else {
       const mediaId = await uploadMedia(file.buffer, file.mimetype);
-      await sendDocumentMessage(to, mediaId, file.originalname);
-      cloudUrl = await uploadToCloudinary(file.buffer, 'raw');
+
+      const [sendResult, cloudResult] = await Promise.allSettled([
+        sendDocumentMessage(to, mediaId, file.originalname),
+        uploadToCloudinary(file.buffer, 'raw')
+      ]);
+
+      wamid = sendResult.status === 'fulfilled' ? sendResult.value : null;
+      cloudUrl = cloudResult.status === 'fulfilled' ? cloudResult.value : '';
     }
 
     const savedMsg = {
       id: 'admin_' + Date.now(),
+      wamid: wamid,
       sender: 'admin',
       type: type,
       content: cloudUrl,
       caption: caption || '',
       filename: file.originalname,
+      status: 'sent',
       timestamp: new Date().toISOString()
     };
 
     saveMessage(to, savedMsg);
     req.io.emit('new_message', { wa_id: to, message: savedMsg });
 
-    res.json({ success: true });
+    res.json({ success: true, wamid });
   } catch (err) {
+    console.error('Send file error:', err.response?.data || err.message);
     res.status(500).json({ error: err.message });
   }
 });

@@ -182,6 +182,7 @@ let mediaRecorder = null;
 let audioChunks = [];
 let recInterval = null;
 let recSeconds = 0;
+let pendingLocalSends = []; // text messages shown optimistically, waiting for server confirmation
 
 window.addEventListener('DOMContentLoaded', () => {
   if (ADMIN_PASSWORD) {
@@ -211,9 +212,29 @@ function setupWebSockets() {
 
   // Instant update when ANY message (user or admin) arrives
   socket.on('new_message', (data) => {
-    loadConversations(); // refresh list snippet
+    loadConversations(); // refresh list snippet (unread badges, previews)
     if (activeWaId && data.wa_id === activeWaId) {
+      if (data.message.sender === 'admin' && data.message.type === 'text') {
+        const idx = pendingLocalSends.findIndex(p => p.content === data.message.content);
+        if (idx !== -1) {
+          const { localId } = pendingLocalSends[idx];
+          pendingLocalSends.splice(idx, 1);
+          // Upgrade the bubble we already showed instantly - attach the real
+          // wamid and flip the clock icon to a tick, instead of duplicating it.
+          upgradeLocalMessage(localId, data.message.wamid, data.message.status || 'sent');
+          return;
+        }
+      }
       appendSingleMessage(data.message); // instantly render inside active chat window
+    }
+  });
+
+  // Delivered / read tick updates for messages we sent
+  socket.on('status_update', (data) => {
+    const el = document.querySelector(`[data-wamid="${data.wamid}"]`);
+    if (el) {
+      const tickEl = el.querySelector('.tick-status');
+      if (tickEl) tickEl.innerHTML = tickIconHtml(data.status);
     }
   });
 }
@@ -257,14 +278,25 @@ function renderChatList(list) {
     const item = document.createElement('div');
     item.className = `chat-item ${activeWaId === c.wa_id ? 'active' : ''}`;
     item.onclick = () => selectChat(c.wa_id, c.token || 'Pending');
+
+    const hasUnread = c.unreadCount && c.unreadCount > 0;
+    const nameStyle = hasUnread ? 'font-weight: 700;' : '';
+    const previewStyle = hasUnread ? 'font-weight: 600; color: var(--text-primary);' : '';
+    const badgeHtml = hasUnread
+      ? `<span style="background:#25D366; color:white; border-radius:50%; min-width:20px; height:20px; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:bold; padding:0 5px;">${c.unreadCount}</span>`
+      : '';
+
     item.innerHTML = `
       <div class="avatar">${c.token ? c.token.substring(0, 3) : 'U'}</div>
       <div class="chat-info">
         <div class="chat-top">
-          <span class="chat-name">${c.wa_id}</span>
+          <span class="chat-name" style="${nameStyle}">${c.wa_id}</span>
           <span class="chat-time">${c.updatedAt ? new Date(c.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</span>
         </div>
-        <div class="chat-preview">${c.token ? 'Token: ' + c.token : 'New Message'} - ${c.lastMessage || ''}</div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div class="chat-preview" style="${previewStyle}">${c.token ? 'Token: ' + c.token : 'New Message'} - ${c.lastMessage || ''}</div>
+          ${badgeHtml}
+        </div>
       </div>
     `;
     container.appendChild(item);
@@ -296,6 +328,7 @@ async function selectChat(wa_id, token) {
 
   renderChatList(conversationsCache);
   await loadMessages();
+  loadConversations(); // refresh sidebar so the unread badge clears now that this chat is marked read
 }
 
 function closeChatMobile() {
@@ -332,10 +365,21 @@ function renderMessages(messages) {
   messages.forEach(m => appendSingleMessage(m));
 }
 
+function tickIconHtml(status) {
+  if (status === 'sending') return '<i class="fas fa-clock" style="color:#999; font-size:11px;"></i>';
+  if (status === 'delivered') return '<i class="fas fa-check-double" style="color:#999; font-size:12px;"></i>';
+  if (status === 'read') return '<i class="fas fa-check-double" style="color:#53bdeb; font-size:12px;"></i>';
+  if (status === 'failed') return '<i class="fas fa-exclamation-circle" style="color:#e74c3c; font-size:12px;" title="Failed to send"></i>';
+  // default / 'sent'
+  return '<i class="fas fa-check" style="color:#999; font-size:12px;"></i>';
+}
+
 function appendSingleMessage(m) {
   const area = document.getElementById('messageArea');
   const bubble = document.createElement('div');
   bubble.className = `message-bubble ${m.sender === 'admin' ? 'outbound' : 'inbound'}`;
+  if (m.id) bubble.setAttribute('data-local-id', m.id);
+  if (m.wamid) bubble.setAttribute('data-wamid', m.wamid);
 
   let body = '';
   if (m.type === 'text') {
@@ -358,9 +402,23 @@ function appendSingleMessage(m) {
   }
 
   const time = new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-  bubble.innerHTML = `${body}<div class="message-time">${time}</div>`;
+  const tickHtml = m.sender === 'admin'
+    ? `<span class="tick-status" style="margin-left:5px;">${tickIconHtml(m.status)}</span>`
+    : '';
+  bubble.innerHTML = `${body}<div class="message-time">${time}${tickHtml}</div>`;
   area.appendChild(bubble);
   area.scrollTop = area.scrollHeight;
+}
+
+// Called when the real server confirmation arrives - upgrades the optimistic
+// "sending" clock icon to a real tick, and attaches the wamid so later
+// delivered/read status updates from Meta know which bubble to update.
+function upgradeLocalMessage(localId, wamid, status) {
+  const el = document.querySelector(`[data-local-id="${localId}"]`);
+  if (!el) return;
+  if (wamid) el.setAttribute('data-wamid', wamid);
+  const tickEl = el.querySelector('.tick-status');
+  if (tickEl) tickEl.innerHTML = tickIconHtml(status || 'sent');
 }
 
 async function toggleRecording() {
@@ -425,6 +483,7 @@ function stopAndSendRecording() {
     formData.append('file', audioBlob, 'live_voice.webm');
     formData.append('isLiveVoice', 'true');
 
+    showUploadingIndicator();
     try {
       await fetch('/admin/send-file', {
         method: 'POST',
@@ -433,10 +492,27 @@ function stopAndSendRecording() {
       });
     } catch (err) {
       alert('Error sending voice note: ' + err.message);
+    } finally {
+      hideUploadingIndicator();
     }
   };
 
   mediaRecorder.stop();
+}
+
+function showUploadingIndicator() {
+  const area = document.getElementById('messageArea');
+  const bubble = document.createElement('div');
+  bubble.id = 'uploadingIndicator';
+  bubble.className = 'message-bubble outbound';
+  bubble.innerHTML = `<div><i class="fas fa-spinner fa-spin"></i> Sending...</div>`;
+  area.appendChild(bubble);
+  area.scrollTop = area.scrollHeight;
+}
+
+function hideUploadingIndicator() {
+  const el = document.getElementById('uploadingIndicator');
+  if (el) el.remove();
 }
 
 async function sendTextMessage() {
@@ -445,6 +521,21 @@ async function sendTextMessage() {
   if (!message || !activeWaId) return;
 
   input.value = '';
+
+  const localId = 'local_' + Date.now();
+
+  // Show it instantly with a clock icon instead of waiting for the WhatsApp
+  // API round trip - that wait was the main reason the panel felt slow to use.
+  appendSingleMessage({
+    id: localId,
+    sender: 'admin',
+    type: 'text',
+    content: message,
+    status: 'sending',
+    timestamp: new Date().toISOString()
+  });
+  pendingLocalSends.push({ content: message, localId });
+
   try {
     await fetch('/admin/send-text', {
       method: 'POST',
@@ -452,6 +543,7 @@ async function sendTextMessage() {
       body: JSON.stringify({ to: activeWaId, message })
     });
   } catch (err) {
+    upgradeLocalMessage(localId, null, 'failed');
     alert('Error sending message: ' + err.message);
   }
 }
@@ -465,6 +557,7 @@ async function sendFile() {
   formData.append('to', activeWaId);
   formData.append('file', file);
 
+  showUploadingIndicator();
   try {
     await fetch('/admin/send-file', {
       method: 'POST',
@@ -474,6 +567,8 @@ async function sendFile() {
     fileInput.value = '';
   } catch (err) {
     alert('Error sending file: ' + err.message);
+  } finally {
+    hideUploadingIndicator();
   }
 }
 
