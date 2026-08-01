@@ -1,580 +1,285 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>R1Bikes - Live WhatsApp Inbox</title>
-<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-<script src="/socket.io/socket.io.js"></script>
-<style>
-  :root {
-    --bg-main: #eae6df;
-    --panel-bg: #ffffff;
-    --header-bg: #f0f2f5;
-    --border-color: #e9edef;
-    --text-primary: #111b21;
-    --text-secondary: #667781;
-    --msg-in: #ffffff;
-    --msg-out: #d9fdd3;
-    --primary: #00a884;
-    --hover-bg: #f5f6f6;
-  }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>R1 Bikes Admin Dashboard</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { display: flex; height: 100vh; background-color: #f0f2f5; }
+    
+    /* Sidebar */
+    .sidebar { width: 320px; background: #ffffff; border-right: 1px solid #e0e0e0; display: flex; flex-direction: column; }
+    .sidebar-header { padding: 15px; background: #075e54; color: #ffffff; font-size: 18px; font-weight: bold; }
+    .auth-box { padding: 10px 15px; background: #e8f5e9; border-bottom: 1px solid #c8e6c9; display: flex; gap: 8px; }
+    .auth-box input { flex: 1; padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; }
+    .auth-box button { padding: 6px 12px; background: #128c7e; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+    
+    .conversation-list { flex: 1; overflow-y: auto; }
+    .conv-item { padding: 12px 15px; border-bottom: 1px solid #f0f0f0; cursor: pointer; display: flex; flex-direction: column; gap: 4px; position: relative; }
+    .conv-item:hover, .conv-item.active { background: #f5f6f6; }
+    .conv-header { display: flex; justify-content: space-between; font-weight: bold; color: #333; }
+    .conv-preview { font-size: 13px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .badge { background: #25d366; color: white; border-radius: 50%; padding: 2px 7px; font-size: 11px; font-weight: bold; align-self: flex-end; }
+    
+    /* Chat Area */
+    .chat-container { flex: 1; display: flex; flex-direction: column; background: #efeae2; }
+    .chat-header { padding: 12px 20px; background: #f0f2f5; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; }
+    .chat-header h3 { color: #333; font-size: 16px; }
+    .btn-delete-chat { background: #d32f2f; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+    
+    .messages-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+    .message { max-width: 65%; padding: 8px 12px; border-radius: 7.5px; position: relative; font-size: 14px; line-height: 1.4; display: flex; flex-direction: column; }
+    .message.user { background: #ffffff; align-self: flex-start; border-top-left-radius: 0; }
+    .message.admin { background: #d9fdd3; align-self: flex-end; border-top-right-radius: 0; }
+    .msg-time { font-size: 10px; color: #888; align-self: flex-end; margin-top: 4px; }
+    .msg-actions { position: absolute; top: 4px; right: 4px; opacity: 0; transition: opacity 0.2s; cursor: pointer; }
+    .message:hover .msg-actions { opacity: 1; }
+    .delete-msg-btn { font-size: 12px; color: #888; }
+    .delete-msg-btn:hover { color: #d32f2f; }
 
-  body.dark-theme {
-    --bg-main: #0c1317;
-    --panel-bg: #111b21;
-    --header-bg: #202c33;
-    --border-color: #222d34;
-    --text-primary: #e9edef;
-    --text-secondary: #8696a0;
-    --msg-in: #202c33;
-    --msg-out: #005c4b;
-    --hover-bg: #2a3942;
-  }
+    /* Media Styling */
+    .message img { max-width: 100%; max-height: 250px; border-radius: 5px; margin-bottom: 4px; }
+    .message audio { width: 220px; margin-top: 4px; }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-  body { background: var(--bg-main); height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-
-  #loginOverlay { position: fixed; inset: 0; background: #00a884; display: flex; align-items: center; justify-content: center; z-index: 1000; }
-  .login-box { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); width: 90%; max-width: 360px; text-align: center; }
-  .login-box h2 { color: #00a884; margin-bottom: 20px; }
-  .login-box input { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 6px; font-size: 16px; outline: none; }
-  .login-box button { width: 100%; padding: 12px; background: #00a884; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }
-
-  .app-container { width: 100%; height: 100vh; display: flex; background: var(--panel-bg); }
-
-  .sidebar { width: 350px; border-right: 1px solid var(--border-color); display: flex; flex-direction: column; background: var(--panel-bg); transition: transform 0.3s ease; }
-  .sidebar-header { height: 60px; background: var(--header-bg); padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); }
-  .sidebar-header h3 { color: var(--text-primary); font-size: 18px; }
-  .header-actions i { color: var(--text-secondary); font-size: 18px; margin-left: 15px; cursor: pointer; }
-
-  .search-box { padding: 8px 12px; background: var(--panel-bg); border-bottom: 1px solid var(--border-color); }
-  .search-wrapper { background: var(--header-bg); border-radius: 8px; padding: 6px 12px; display: flex; align-items: center; }
-  .search-wrapper i { color: var(--text-secondary); margin-right: 10px; }
-  .search-wrapper input { background: transparent; border: none; outline: none; color: var(--text-primary); width: 100%; font-size: 14px; }
-
-  .chat-list { flex: 1; overflow-y: auto; }
-  .chat-item { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border-color); cursor: pointer; transition: 0.2s; }
-  .chat-item:hover, .chat-item.active { background: var(--hover-bg); }
-  .avatar { width: 45px; height: 45px; border-radius: 50%; background: #00a884; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; margin-right: 12px; font-size: 18px; }
-  .chat-info { flex: 1; overflow: hidden; }
-  .chat-top { display: flex; justify-content: space-between; margin-bottom: 4px; }
-  .chat-name { font-weight: 600; color: var(--text-primary); font-size: 15px; }
-  .chat-time { font-size: 12px; color: var(--text-secondary); }
-  .chat-preview { font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-  .chat-window { flex: 1; display: flex; flex-direction: column; background: var(--bg-main); position: relative; }
-  .chat-header { height: 60px; background: var(--header-bg); padding: 10px 16px; display: flex; align-items: center; border-bottom: 1px solid var(--border-color); z-index: 10; }
-  .back-btn { display: none; color: var(--text-secondary); font-size: 20px; margin-right: 12px; cursor: pointer; }
-  .active-user-details { display: flex; align-items: center; flex: 1; }
-  .active-user-details h4 { color: var(--text-primary); font-size: 16px; }
-  .active-user-details p { color: var(--text-secondary); font-size: 12px; }
-
-  .message-area { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-  .message-bubble { max-width: 75%; padding: 8px 12px; border-radius: 8px; font-size: 14px; line-height: 1.4; position: relative; word-wrap: break-word; }
-  .message-bubble.inbound { background: var(--msg-in); color: var(--text-primary); align-self: flex-start; border-top-left-radius: 0; }
-  .message-bubble.outbound { background: var(--msg-out); color: var(--text-primary); align-self: flex-end; border-top-right-radius: 0; }
-  .message-time { font-size: 10px; color: var(--text-secondary); text-align: right; margin-top: 4px; }
-  .message-media { max-width: 100%; border-radius: 6px; margin-top: 5px; max-height: 250px; object-fit: cover; cursor: pointer; }
-
-  .chat-footer { background: var(--header-bg); padding: 10px 16px; display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--border-color); }
-  .chat-footer input[type="text"] { flex: 1; padding: 10px 14px; border-radius: 8px; border: none; outline: none; background: var(--panel-bg); color: var(--text-primary); font-size: 14px; }
-  .attach-btn, .mic-btn, .send-btn { background: transparent; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer; padding: 5px; }
-  .send-btn { color: #00a884; }
-
-  .recording-bar { display: none; flex: 1; align-items: center; justify-content: space-between; background: var(--panel-bg); padding: 6px 14px; border-radius: 8px; color: #ea4335; font-weight: bold; }
-  .recording-actions { display: flex; gap: 15px; }
-  .recording-actions i { font-size: 20px; cursor: pointer; }
-  .cancel-rec { color: #ea4335; }
-  .send-rec { color: #00a884; }
-
-  #fileInput { display: none; }
-
-  .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-secondary); }
-  .empty-state i { font-size: 60px; margin-bottom: 15px; color: #00a884; }
-
-  @media (max-width: 768px) {
-    .sidebar { width: 100%; position: absolute; height: 100%; z-index: 20; }
-    .chat-window { width: 100%; position: absolute; height: 100%; z-index: 10; }
-    .app-container.chat-active .sidebar { transform: translateX(-100%); }
-    .back-btn { display: block; }
-  }
-</style>
+    /* Input Footer */
+    .chat-footer { padding: 10px 15px; background: #f0f2f5; display: flex; gap: 8px; align-items: center; border-top: 1px solid #e0e0e0; }
+    .chat-footer input[type="text"] { flex: 1; padding: 10px 14px; border: 1px solid #ccc; border-radius: 8px; outline: none; }
+    .chat-footer button { padding: 10px 16px; background: #128c7e; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+    
+    /* Media Picker Buttons */
+    .media-btn { background: none; border: none; font-size: 20px; cursor: pointer; padding: 0 4px; }
+    .hidden-input { display: none; }
+  </style>
 </head>
 <body>
 
-<div id="loginOverlay">
-  <div class="login-box">
-    <h2>R1Bikes Reply Tool</h2>
-    <input type="password" id="passwordInput" placeholder="Enter Admin Password">
-    <button onclick="authenticate()">Login</button>
-  </div>
-</div>
-
-<div class="app-container" id="appContainer">
+  <!-- Sidebar -->
   <div class="sidebar">
-    <div class="sidebar-header">
-      <h3>Chats</h3>
-      <div class="header-actions">
-        <i class="fas fa-adjust" onclick="toggleTheme()" title="Toggle Theme"></i>
-        <i class="fas fa-sync" onclick="loadConversations()" title="Refresh"></i>
-        <i class="fas fa-sign-out-alt" onclick="logout()" title="Logout"></i>
-      </div>
+    <div class="sidebar-header">R1 Bikes Chats</div>
+    <div class="auth-box">
+      <input type="password" id="adminPassword" placeholder="Admin Password">
+      <button onclick="saveAuth()">Login</button>
     </div>
-    <div class="search-box">
-      <div class="search-wrapper">
-        <i class="fas fa-search"></i>
-        <input type="text" id="searchInput" placeholder="Search phone or token..." onkeyup="filterChats()">
-      </div>
-    </div>
-    <div class="chat-list" id="chatList"></div>
+    <div class="conversation-list" id="convList"></div>
   </div>
 
-  <div class="chat-window">
-    <div class="empty-state" id="emptyState">
-      <i class="fab fa-whatsapp"></i>
-      <h2>R1Bikes WhatsApp Dashboard</h2>
-      <p>Select a customer chat from the sidebar to start messaging</p>
+  <!-- Chat Area -->
+  <div class="chat-container">
+    <div class="chat-header" id="chatHeader">
+      <h3 id="currentChatTitle">Select a chat to begin</h3>
+      <button class="btn-delete-chat" id="deleteChatBtn" style="display:none;" onclick="deleteCurrentChat()">Delete Chat</button>
     </div>
 
-    <div id="activeChatInterface" style="display:none; height: 100%; flex-direction: column;">
-      <div class="chat-header">
-        <i class="fas fa-arrow-left back-btn" onclick="closeChatMobile()"></i>
-        <div class="avatar" id="headerAvatar">U</div>
-        <div class="active-user-details">
-          <div>
-            <h4 id="headerTitle">+91XXXXXXXXXX</h4>
-            <p id="headerSubtitle">Token: Loading...</p>
-          </div>
-        </div>
-      </div>
+    <div class="messages-box" id="messagesBox"></div>
 
-      <div class="message-area" id="messageArea"></div>
+    <div class="chat-footer" id="chatFooter" style="display:none;">
+      <!-- Direct Gallery Picker -->
+      <button class="media-btn" title="Send Image (Gallery)" onclick="document.getElementById('imageInput').click()">🖼️</button>
+      <input type="file" id="imageInput" class="hidden-input" accept="image/*" onchange="sendFile(this.files[0])">
 
-      <div class="chat-footer">
-        <label for="fileInput" class="attach-btn" title="Attach Image, PDF, or Audio"><i class="fas fa-paperclip"></i></label>
-        <input type="file" id="fileInput" accept="image/*,.pdf,audio/*" onchange="sendFile()">
+      <!-- Document Picker -->
+      <button class="media-btn" title="Send Document" onclick="document.getElementById('docInput').click()">📄</button>
+      <input type="file" id="docInput" class="hidden-input" accept=".pdf,.doc,.docx,.txt" onchange="sendFile(this.files[0])">
 
-        <button class="mic-btn" id="micBtn" onclick="toggleRecording()" title="Record Voice Note"><i class="fas fa-microphone"></i></button>
-
-        <div class="recording-bar" id="recordingBar">
-          <span><i class="fas fa-circle"></i> Recording: <span id="recTimer">00:00</span></span>
-          <div class="recording-actions">
-            <i class="fas fa-trash cancel-rec" onclick="cancelRecording()" title="Cancel"></i>
-            <i class="fas fa-paper-plane send-rec" onclick="stopAndSendRecording()" title="Send Voice Note"></i>
-          </div>
-        </div>
-
-        <input type="text" id="messageInput" placeholder="Type a message..." onkeypress="handleKeyPress(event)">
-        <button class="send-btn" id="sendBtn" onclick="sendTextMessage()"><i class="fas fa-paper-plane"></i></button>
-      </div>
+      <input type="text" id="messageInput" placeholder="Type a message..." onkeypress="handleKeyPress(event)">
+      <button onclick="sendTextMessage()">Send</button>
     </div>
   </div>
-</div>
 
-<script>
-let ADMIN_PASSWORD = localStorage.getItem('r1_admin_password') || '';
-let activeWaId = null;
-let conversationsCache = [];
-let socket = null;
+  <script>
+    let activeWaId = null;
+    let ADMIN_PASSWORD = localStorage.getItem('admin_pass') || '';
+    document.getElementById('adminPassword').value = ADMIN_PASSWORD;
 
-let mediaRecorder = null;
-let audioChunks = [];
-let recInterval = null;
-let recSeconds = 0;
-let pendingLocalSends = []; // text messages shown optimistically, waiting for server confirmation
+    const socket = io();
 
-window.addEventListener('DOMContentLoaded', () => {
-  if (ADMIN_PASSWORD) {
-    document.getElementById('loginOverlay').style.display = 'none';
-    initDashboard();
-  }
-});
+    socket.on('connect', () => { console.log('WebSocket Connected'); });
 
-function authenticate() {
-  const inputPwd = document.getElementById('passwordInput').value.trim();
-  if (!inputPwd) return alert('Enter Password');
-
-  ADMIN_PASSWORD = inputPwd;
-  localStorage.setItem('r1_admin_password', ADMIN_PASSWORD);
-  document.getElementById('loginOverlay').style.display = 'none';
-  initDashboard();
-}
-
-function initDashboard() {
-  loadConversations();
-  setupWebSockets();
-}
-
-function setupWebSockets() {
-  if (socket) return;
-  socket = io();
-
-  // Instant update when ANY message (user or admin) arrives
-  socket.on('new_message', (data) => {
-    loadConversations(); // refresh list snippet (unread badges, previews)
-    if (activeWaId && data.wa_id === activeWaId) {
-      if (data.message.sender === 'admin' && data.message.type === 'text') {
-        const idx = pendingLocalSends.findIndex(p => p.content === data.message.content);
-        if (idx !== -1) {
-          const { localId } = pendingLocalSends[idx];
-          pendingLocalSends.splice(idx, 1);
-          // Upgrade the bubble we already showed instantly - attach the real
-          // wamid and flip the clock icon to a tick, instead of duplicating it.
-          upgradeLocalMessage(localId, data.message.wamid, data.message.status || 'sent');
-          return;
-        }
+    socket.on('new_message', (data) => {
+      loadConversations();
+      if (data.wa_id === activeWaId) {
+        appendMessage(data.message);
       }
-      appendSingleMessage(data.message); // instantly render inside active chat window
-    }
-  });
-
-  // Delivered / read tick updates for messages we sent
-  socket.on('status_update', (data) => {
-    const el = document.querySelector(`[data-wamid="${data.wamid}"]`);
-    if (el) {
-      const tickEl = el.querySelector('.tick-status');
-      if (tickEl) tickEl.innerHTML = tickIconHtml(data.status);
-    }
-  });
-}
-
-function logout() {
-  if (confirm('Are you sure you want to logout?')) {
-    localStorage.removeItem('r1_admin_password');
-    location.reload();
-  }
-}
-
-function toggleTheme() {
-  document.body.classList.toggle('dark-theme');
-}
-
-async function loadConversations() {
-  try {
-    const res = await fetch('/admin/conversations', {
-      headers: { 'x-admin-password': ADMIN_PASSWORD }
     });
-    if (res.status === 401) {
-      localStorage.removeItem('r1_admin_password');
-      alert('Incorrect password or session expired.');
-      location.reload();
-      return;
+
+    socket.on('message_deleted', (data) => {
+      if (data.wa_id === activeWaId) {
+        const msgElem = document.getElementById(`msg-${data.msg_id}`);
+        if (msgElem) msgElem.remove();
+      }
+      loadConversations();
+    });
+
+    socket.on('conversation_deleted', (data) => {
+      if (data.wa_id === activeWaId) {
+        activeWaId = null;
+        document.getElementById('messagesBox').innerHTML = '';
+        document.getElementById('currentChatTitle').innerText = 'Select a chat to begin';
+        document.getElementById('chatFooter').style.display = 'none';
+        document.getElementById('deleteChatBtn').style.display = 'none';
+      }
+      loadConversations();
+    });
+
+    function saveAuth() {
+      ADMIN_PASSWORD = document.getElementById('adminPassword').value.trim();
+      localStorage.setItem('admin_pass', ADMIN_PASSWORD);
+      loadConversations();
     }
-    const data = await res.json();
-    if (data.conversations) {
-      conversationsCache = data.conversations;
-      renderChatList(conversationsCache);
+
+    async function loadConversations() {
+      try {
+        const res = await fetch('/admin/conversations', {
+          headers: { 'x-admin-password': ADMIN_PASSWORD }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        const listElem = document.getElementById('convList');
+        listElem.innerHTML = '';
+        
+        data.conversations.forEach(c => {
+          const div = document.createElement('div');
+          div.className = `conv-item ${c.wa_id === activeWaId ? 'active' : ''}`;
+          div.onclick = () => openChat(c.wa_id);
+          div.innerHTML = `
+            <div class="conv-header">
+              <span>+${c.wa_id}</span>
+              ${c.unreadCount ? `<span class="badge">${c.unreadCount}</span>` : ''}
+            </div>
+            <div class="conv-preview">${c.lastMessage || 'No messages'}</div>
+          `;
+          listElem.appendChild(div);
+        });
+      } catch (err) {
+        console.error('Failed to load conversations:', err);
+      }
     }
-  } catch (err) {
-    console.error('Failed loading conversations', err);
-  }
-}
 
-function renderChatList(list) {
-  const container = document.getElementById('chatList');
-  container.innerHTML = '';
-  list.forEach(c => {
-    const item = document.createElement('div');
-    item.className = `chat-item ${activeWaId === c.wa_id ? 'active' : ''}`;
-    item.onclick = () => selectChat(c.wa_id, c.token || 'Pending');
+    async function openChat(wa_id) {
+      activeWaId = wa_id;
+      document.getElementById('currentChatTitle').innerText = `Chatting with +${wa_id}`;
+      document.getElementById('chatFooter').style.display = 'flex';
+      document.getElementById('deleteChatBtn').style.display = 'block';
+      loadConversations();
 
-    const hasUnread = c.unreadCount && c.unreadCount > 0;
-    const nameStyle = hasUnread ? 'font-weight: 700;' : '';
-    const previewStyle = hasUnread ? 'font-weight: 600; color: var(--text-primary);' : '';
-    const badgeHtml = hasUnread
-      ? `<span style="background:#25D366; color:white; border-radius:50%; min-width:20px; height:20px; display:inline-flex; align-items:center; justify-content:center; font-size:11px; font-weight:bold; padding:0 5px;">${c.unreadCount}</span>`
-      : '';
+      try {
+        const res = await fetch(`/admin/messages/${wa_id}`, {
+          headers: { 'x-admin-password': ADMIN_PASSWORD }
+        });
+        const data = await res.json();
+        const box = document.getElementById('messagesBox');
+        box.innerHTML = '';
+        data.messages.forEach(appendMessage);
+        box.scrollTop = box.scrollHeight;
+      } catch (err) {
+        console.error('Failed to load messages:', err);
+      }
+    }
 
-    item.innerHTML = `
-      <div class="avatar">${c.token ? c.token.substring(0, 3) : 'U'}</div>
-      <div class="chat-info">
-        <div class="chat-top">
-          <span class="chat-name" style="${nameStyle}">${c.wa_id}</span>
-          <span class="chat-time">${c.updatedAt ? new Date(c.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</span>
+    function appendMessage(msg) {
+      const box = document.getElementById('messagesBox');
+      const div = document.createElement('div');
+      div.className = `message ${msg.sender}`;
+      div.id = `msg-${msg.id || msg.wamid}`;
+
+      let contentHtml = '';
+      if (msg.type === 'text') {
+        contentHtml = `<div>${escapeHtml(msg.content)}</div>`;
+      } else if (msg.type === 'image') {
+        contentHtml = `<img src="${msg.content}" alt="Image"><div>${escapeHtml(msg.caption || '')}</div>`;
+      } else if (msg.type === 'audio') {
+        contentHtml = `<audio controls src="${msg.content}"></audio>`;
+      } else if (msg.type === 'document') {
+        contentHtml = `<a href="${msg.content}" target="_blank">📄 ${escapeHtml(msg.filename || 'Document')}</a>`;
+      }
+
+      const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      div.innerHTML = `
+        <div class="msg-actions">
+          <span class="delete-msg-btn" onclick="deleteMessage('${msg.id || msg.wamid}')" title="Delete Message">🗑️</span>
         </div>
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div class="chat-preview" style="${previewStyle}">${c.token ? 'Token: ' + c.token : 'New Message'} - ${c.lastMessage || ''}</div>
-          ${badgeHtml}
-        </div>
-      </div>
-    `;
-    container.appendChild(item);
-  });
-}
+        ${contentHtml}
+        <div class="msg-time">${timeStr}</div>
+      `;
 
-function filterChats() {
-  const q = document.getElementById('searchInput').value.toLowerCase();
-  const filtered = conversationsCache.filter(c =>
-    c.wa_id.toLowerCase().includes(q) || (c.token && c.token.toLowerCase().includes(q))
-  );
-  renderChatList(filtered);
-}
-
-async function selectChat(wa_id, token) {
-  activeWaId = wa_id;
-  document.getElementById('appContainer').classList.add('chat-active');
-  document.getElementById('emptyState').style.display = 'none';
-  const activeInterface = document.getElementById('activeChatInterface');
-  activeInterface.style.display = 'flex';
-
-  document.getElementById('headerTitle').textContent = `+${wa_id}`;
-  document.getElementById('headerSubtitle').textContent = `Token: ${token}`;
-  document.getElementById('headerAvatar').textContent = token !== 'Pending' ? token.substring(0, 3) : 'U';
-
-  if (window.location.hash !== '#chat') {
-    history.pushState({ chatOpen: true }, '', '#chat');
-  }
-
-  renderChatList(conversationsCache);
-  await loadMessages();
-  loadConversations(); // refresh sidebar so the unread badge clears now that this chat is marked read
-}
-
-function closeChatMobile() {
-  document.getElementById('appContainer').classList.remove('chat-active');
-  activeWaId = null;
-  if (window.location.hash === '#chat') {
-    history.back();
-  }
-}
-
-window.onpopstate = function(event) {
-  if (document.getElementById('appContainer').classList.contains('chat-active')) {
-    document.getElementById('appContainer').classList.remove('chat-active');
-    activeWaId = null;
-  }
-};
-
-async function loadMessages() {
-  if (!activeWaId) return;
-  try {
-    const res = await fetch(`/admin/messages/${activeWaId}`, {
-      headers: { 'x-admin-password': ADMIN_PASSWORD }
-    });
-    const data = await res.json();
-    renderMessages(data.messages || []);
-  } catch (err) {
-    console.error('Failed loading messages', err);
-  }
-}
-
-function renderMessages(messages) {
-  const area = document.getElementById('messageArea');
-  area.innerHTML = '';
-  messages.forEach(m => appendSingleMessage(m));
-}
-
-function tickIconHtml(status) {
-  if (status === 'sending') return '<i class="fas fa-clock" style="color:#999; font-size:11px;"></i>';
-  if (status === 'delivered') return '<i class="fas fa-check-double" style="color:#999; font-size:12px;"></i>';
-  if (status === 'read') return '<i class="fas fa-check-double" style="color:#53bdeb; font-size:12px;"></i>';
-  if (status === 'failed') return '<i class="fas fa-exclamation-circle" style="color:#e74c3c; font-size:12px;" title="Failed to send"></i>';
-  // default / 'sent'
-  return '<i class="fas fa-check" style="color:#999; font-size:12px;"></i>';
-}
-
-function appendSingleMessage(m) {
-  const area = document.getElementById('messageArea');
-  const bubble = document.createElement('div');
-  bubble.className = `message-bubble ${m.sender === 'admin' ? 'outbound' : 'inbound'}`;
-  if (m.id) bubble.setAttribute('data-local-id', m.id);
-  if (m.wamid) bubble.setAttribute('data-wamid', m.wamid);
-
-  let body = '';
-  if (m.type === 'text') {
-    body = `<div>${m.content}</div>`;
-  } else if (m.type === 'image') {
-    body = `<div><img src="${m.content}" class="message-media" onclick="window.open(this.src)"><br><span>${m.caption || ''}</span></div>`;
-  } else if (m.type === 'document') {
-    body = `<div><i class="fas fa-file-pdf"></i> <a href="${m.content}" target="_blank" download="${m.filename || 'document.pdf'}" style="color:inherit; font-weight:bold;">${m.filename || 'Download PDF'}</a></div>`;
-  } else if (m.type === 'audio') {
-    body = `
-      <div style="min-width: 240px; padding: 4px 0;">
-        <div style="display: flex; align-items: center; margin-bottom: 6px; font-weight: 600; font-size: 13px;">
-          <i class="fas fa-microphone" style="color: #00a884; margin-right: 8px; font-size: 16px;"></i> Voice Message
-        </div>
-        <audio controls preload="auto" style="width: 100%; height: 36px; border-radius: 20px; outline: none;" src="${m.content}">
-          Your browser does not support audio playback.
-        </audio>
-      </div>
-    `;
-  }
-
-  const time = new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-  const tickHtml = m.sender === 'admin'
-    ? `<span class="tick-status" style="margin-left:5px;">${tickIconHtml(m.status)}</span>`
-    : '';
-  bubble.innerHTML = `${body}<div class="message-time">${time}${tickHtml}</div>`;
-  area.appendChild(bubble);
-  area.scrollTop = area.scrollHeight;
-}
-
-// Called when the real server confirmation arrives - upgrades the optimistic
-// "sending" clock icon to a real tick, and attaches the wamid so later
-// delivered/read status updates from Meta know which bubble to update.
-function upgradeLocalMessage(localId, wamid, status) {
-  const el = document.querySelector(`[data-local-id="${localId}"]`);
-  if (!el) return;
-  if (wamid) el.setAttribute('data-wamid', wamid);
-  const tickEl = el.querySelector('.tick-status');
-  if (tickEl) tickEl.innerHTML = tickIconHtml(status || 'sent');
-}
-
-async function toggleRecording() {
-  if (mediaRecorder && mediaRecorder.state === 'recording') return;
-
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-    mediaRecorder = new MediaRecorder(stream);
-    audioChunks = [];
-
-    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-    mediaRecorder.start();
-
-    document.getElementById('micBtn').style.display = 'none';
-    document.getElementById('messageInput').style.display = 'none';
-    document.getElementById('sendBtn').style.display = 'none';
-    document.getElementById('recordingBar').style.display = 'flex';
-
-    recSeconds = 0;
-    document.getElementById('recTimer').textContent = '00:00';
-    recInterval = setInterval(() => {
-      recSeconds++;
-      const mins = String(Math.floor(recSeconds / 60)).padStart(2, '0');
-      const secs = String(recSeconds % 60).padStart(2, '0');
-      document.getElementById('recTimer').textContent = `${mins}:${secs}`;
-    }, 1000);
-
-  } catch (err) {
-    alert('Microphone access rejected or not supported: ' + err.message);
-  }
-}
-
-function resetRecUI() {
-  clearInterval(recInterval);
-  document.getElementById('recordingBar').style.display = 'none';
-  document.getElementById('micBtn').style.display = 'inline-block';
-  document.getElementById('messageInput').style.display = 'inline-block';
-  document.getElementById('sendBtn').style.display = 'inline-block';
-}
-
-function cancelRecording() {
-  if (mediaRecorder) {
-    mediaRecorder.stop();
-    mediaRecorder.stream.getTracks().forEach(track => track.stop());
-  }
-  resetRecUI();
-}
-
-function stopAndSendRecording() {
-  if (!mediaRecorder) return;
-
-  mediaRecorder.onstop = async () => {
-    const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
-    mediaRecorder.stream.getTracks().forEach(track => track.stop());
-    resetRecUI();
-
-    if (!activeWaId) return;
-
-    const formData = new FormData();
-    formData.append('to', activeWaId);
-    formData.append('file', audioBlob, 'live_voice.webm');
-    formData.append('isLiveVoice', 'true');
-
-    showUploadingIndicator();
-    try {
-      await fetch('/admin/send-file', {
-        method: 'POST',
-        headers: { 'x-admin-password': ADMIN_PASSWORD },
-        body: formData
-      });
-    } catch (err) {
-      alert('Error sending voice note: ' + err.message);
-    } finally {
-      hideUploadingIndicator();
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
     }
-  };
 
-  mediaRecorder.stop();
-}
+    async function sendTextMessage() {
+      const input = document.getElementById('messageInput');
+      const text = input.value.trim();
+      if (!text || !activeWaId) return;
 
-function showUploadingIndicator() {
-  const area = document.getElementById('messageArea');
-  const bubble = document.createElement('div');
-  bubble.id = 'uploadingIndicator';
-  bubble.className = 'message-bubble outbound';
-  bubble.innerHTML = `<div><i class="fas fa-spinner fa-spin"></i> Sending...</div>`;
-  area.appendChild(bubble);
-  area.scrollTop = area.scrollHeight;
-}
+      input.value = '';
+      try {
+        await fetch('/admin/send-text', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-admin-password': ADMIN_PASSWORD
+          },
+          body: JSON.stringify({ to: activeWaId, message: text })
+        });
+      } catch (err) {
+        console.error('Error sending message:', err);
+      }
+    }
 
-function hideUploadingIndicator() {
-  const el = document.getElementById('uploadingIndicator');
-  if (el) el.remove();
-}
+    async function sendFile(file) {
+      if (!file || !activeWaId) return;
+      const formData = new FormData();
+      formData.append('to', activeWaId);
+      formData.append('file', file);
 
-async function sendTextMessage() {
-  const input = document.getElementById('messageInput');
-  const message = input.value.trim();
-  if (!message || !activeWaId) return;
+      try {
+        await fetch('/admin/send-file', {
+          method: 'POST',
+          headers: { 'x-admin-password': ADMIN_PASSWORD },
+          body: formData
+        });
+      } catch (err) {
+        console.error('Error uploading file:', err);
+      }
+    }
 
-  input.value = '';
+    async function deleteMessage(msgId) {
+      if (!confirm('Delete this message?')) return;
+      try {
+        await fetch(`/admin/messages/${activeWaId}/${msgId}`, {
+          method: 'DELETE',
+          headers: { 'x-admin-password': ADMIN_PASSWORD }
+        });
+      } catch (err) {
+        console.error('Failed to delete message:', err);
+      }
+    }
 
-  const localId = 'local_' + Date.now();
+    async function deleteCurrentChat() {
+      if (!confirm(`Are you sure you want to delete the entire chat for +${activeWaId}?`)) return;
+      try {
+        await fetch(`/admin/conversations/${activeWaId}`, {
+          method: 'DELETE',
+          headers: { 'x-admin-password': ADMIN_PASSWORD }
+        });
+      } catch (err) {
+        console.error('Failed to delete chat:', err);
+      }
+    }
 
-  // Show it instantly with a clock icon instead of waiting for the WhatsApp
-  // API round trip - that wait was the main reason the panel felt slow to use.
-  appendSingleMessage({
-    id: localId,
-    sender: 'admin',
-    type: 'text',
-    content: message,
-    status: 'sending',
-    timestamp: new Date().toISOString()
-  });
-  pendingLocalSends.push({ content: message, localId });
+    function handleKeyPress(e) {
+      if (e.key === 'Enter') sendTextMessage();
+    }
 
-  try {
-    await fetch('/admin/send-text', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-password': ADMIN_PASSWORD },
-      body: JSON.stringify({ to: activeWaId, message })
-    });
-  } catch (err) {
-    upgradeLocalMessage(localId, null, 'failed');
-    alert('Error sending message: ' + err.message);
-  }
-}
+    function escapeHtml(text) {
+      return text ? text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
+    }
 
-async function sendFile() {
-  const fileInput = document.getElementById('fileInput');
-  const file = fileInput.files[0];
-  if (!file || !activeWaId) return;
-
-  const formData = new FormData();
-  formData.append('to', activeWaId);
-  formData.append('file', file);
-
-  showUploadingIndicator();
-  try {
-    await fetch('/admin/send-file', {
-      method: 'POST',
-      headers: { 'x-admin-password': ADMIN_PASSWORD },
-      body: formData
-    });
-    fileInput.value = '';
-  } catch (err) {
-    alert('Error sending file: ' + err.message);
-  } finally {
-    hideUploadingIndicator();
-  }
-}
-
-function handleKeyPress(e) {
-  if (e.key === 'Enter') sendTextMessage();
-}
-</script>
+    if (ADMIN_PASSWORD) loadConversations();
+  </script>
 </body>
 </html>
