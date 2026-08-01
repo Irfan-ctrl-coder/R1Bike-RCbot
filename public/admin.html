@@ -152,8 +152,23 @@
       <div class="message-area" id="messageArea"></div>
 
       <div class="chat-footer">
-        <label for="fileInput" class="attach-btn" title="Attach Image, PDF, or Audio"><i class="fas fa-paperclip"></i></label>
-        <input type="file" id="fileInput" accept="image/*,.pdf,audio/*" onchange="sendFile()">
+        <div style="position:relative;">
+          <button class="attach-btn" onclick="toggleAttachMenu()" title="Attach"><i class="fas fa-paperclip"></i></button>
+          <div id="attachMenu" style="display:none; position:absolute; bottom:45px; left:0; background:var(--panel-bg); border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,0.2); overflow:hidden; z-index:50; min-width:180px;">
+            <label for="galleryInput" style="display:flex; align-items:center; gap:10px; padding:12px 16px; cursor:pointer; color:var(--text-primary); font-size:14px;">
+              <i class="fas fa-image" style="color:#a855f7;"></i> Gallery
+            </label>
+            <label for="cameraInput" style="display:flex; align-items:center; gap:10px; padding:12px 16px; cursor:pointer; color:var(--text-primary); font-size:14px;">
+              <i class="fas fa-camera" style="color:#ea4335;"></i> Camera
+            </label>
+            <label for="docInput" style="display:flex; align-items:center; gap:10px; padding:12px 16px; cursor:pointer; color:var(--text-primary); font-size:14px;">
+              <i class="fas fa-file-alt" style="color:#128C7E;"></i> Document
+            </label>
+          </div>
+        </div>
+        <input type="file" id="galleryInput" accept="image/*,video/*" style="display:none;" onchange="sendFile(this)">
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;" onchange="sendFile(this)">
+        <input type="file" id="docInput" accept=".pdf,.doc,.docx,.xls,.xlsx" style="display:none;" onchange="sendFile(this)">
 
         <button class="mic-btn" id="micBtn" onclick="toggleRecording()" title="Record Voice Note"><i class="fas fa-microphone"></i></button>
 
@@ -183,6 +198,7 @@ let audioChunks = [];
 let recInterval = null;
 let recSeconds = 0;
 let pendingLocalSends = []; // text messages shown optimistically, waiting for server confirmation
+let pendingFileBubbleIds = []; // file/image/voice bubbles shown optimistically, waiting for confirmation
 
 window.addEventListener('DOMContentLoaded', () => {
   if (ADMIN_PASSWORD) {
@@ -224,6 +240,13 @@ function setupWebSockets() {
           upgradeLocalMessage(localId, data.message.wamid, data.message.status || 'sent');
           return;
         }
+      }
+      if (data.message.sender === 'admin' && data.message.type !== 'text' && pendingFileBubbleIds.length > 0) {
+        // Remove the oldest pending file/image/voice preview bubble - the real,
+        // confirmed version is about to be rendered in its place below.
+        const oldestId = pendingFileBubbleIds.shift();
+        const oldEl = document.querySelector(`[data-local-id="${oldestId}"]`);
+        if (oldEl) oldEl.remove();
       }
       appendSingleMessage(data.message); // instantly render inside active chat window
     }
@@ -483,7 +506,7 @@ function stopAndSendRecording() {
     formData.append('file', audioBlob, 'live_voice.webm');
     formData.append('isLiveVoice', 'true');
 
-    showUploadingIndicator();
+    appendPendingFilePreview('audio');
     try {
       await fetch('/admin/send-file', {
         method: 'POST',
@@ -492,8 +515,6 @@ function stopAndSendRecording() {
       });
     } catch (err) {
       alert('Error sending voice note: ' + err.message);
-    } finally {
-      hideUploadingIndicator();
     }
   };
 
@@ -513,6 +534,45 @@ function showUploadingIndicator() {
 function hideUploadingIndicator() {
   const el = document.getElementById('uploadingIndicator');
   if (el) el.remove();
+}
+
+// Shows an in-place pending bubble that actually looks like the message being
+// sent (real image thumbnail, file icon + name, or mic icon for voice notes)
+// with a small clock badge, instead of a generic "Sending..." line at the
+// bottom of the chat. Returns the localId so it can be matched and removed
+// once the server confirmation arrives via the socket 'new_message' event.
+function appendPendingFilePreview(kind, previewUrl, label) {
+  const area = document.getElementById('messageArea');
+  const localId = 'filepending_' + Date.now();
+
+  const bubble = document.createElement('div');
+  bubble.className = 'message-bubble outbound';
+  bubble.setAttribute('data-local-id', localId);
+  bubble.style.opacity = '0.75';
+
+  let inner = '';
+  if (kind === 'image') {
+    inner = `<div style="position:relative;"><img src="${previewUrl}" class="message-media"></div>`;
+  } else if (kind === 'audio') {
+    inner = `
+      <div style="min-width: 200px; display:flex; align-items:center; gap:10px;">
+        <i class="fas fa-microphone" style="color:#00a884; font-size:18px;"></i>
+        <span>Voice message</span>
+      </div>`;
+  } else {
+    inner = `
+      <div style="display:flex; align-items:center; gap:10px;">
+        <i class="fas fa-file-pdf" style="font-size:18px;"></i>
+        <span>${label || 'File'}</span>
+      </div>`;
+  }
+
+  bubble.innerHTML = `${inner}<div class="message-time"><i class="fas fa-clock" style="color:#999; font-size:11px;"></i> Sending...</div>`;
+  area.appendChild(bubble);
+  area.scrollTop = area.scrollHeight;
+
+  pendingFileBubbleIds.push(localId);
+  return localId;
 }
 
 async function sendTextMessage() {
@@ -548,27 +608,48 @@ async function sendTextMessage() {
   }
 }
 
-async function sendFile() {
-  const fileInput = document.getElementById('fileInput');
-  const file = fileInput.files[0];
+function toggleAttachMenu() {
+  const menu = document.getElementById('attachMenu');
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('attachMenu');
+  if (menu && menu.style.display === 'block' && !e.target.closest('.attach-btn') && !e.target.closest('#attachMenu')) {
+    menu.style.display = 'none';
+  }
+});
+
+async function sendFile(inputEl) {
+  const file = inputEl.files[0];
   if (!file || !activeWaId) return;
+
+  document.getElementById('attachMenu').style.display = 'none';
 
   const formData = new FormData();
   formData.append('to', activeWaId);
   formData.append('file', file);
 
-  showUploadingIndicator();
+  // Show a real-looking pending preview right where the message will land -
+  // actual image thumbnail for images, file icon+name for PDFs/others.
+  if (file.type.startsWith('image/')) {
+    const previewUrl = URL.createObjectURL(file);
+    appendPendingFilePreview('image', previewUrl);
+  } else if (file.type.startsWith('audio/')) {
+    appendPendingFilePreview('audio');
+  } else {
+    appendPendingFilePreview('document', null, file.name);
+  }
+
   try {
     await fetch('/admin/send-file', {
       method: 'POST',
       headers: { 'x-admin-password': ADMIN_PASSWORD },
       body: formData
     });
-    fileInput.value = '';
+    inputEl.value = '';
   } catch (err) {
     alert('Error sending file: ' + err.message);
-  } finally {
-    hideUploadingIndicator();
   }
 }
 
