@@ -1,23 +1,50 @@
-const { getDoc, getTodayDateString } = require('../services/sheets');
+const { GoogleSpreadsheet } = require('google-spreadsheet');
+const { JWT } = require('google-auth-library');
 
-async function generateToken() {
+const SHEET_ID = process.env.SHEET_ID;
+
+const serviceAccountAuth = new JWT({
+  email: process.env.GOOGLE_CLIENT_EMAIL,
+  key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+  scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+});
+
+let cachedDoc = null;
+
+async function getDoc() {
+  if (!cachedDoc) {
+    cachedDoc = new GoogleSpreadsheet(SHEET_ID, serviceAccountAuth);
+    await cachedDoc.loadInfo();
+  }
+  return cachedDoc;
+}
+
+function getTodayDateString() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
+async function logOrder(data) {
   try {
     const doc = await getDoc();
     const sheet = doc.sheetsByIndex[0];
-    const rows = await sheet.getRows();
 
-    const today = getTodayDateString();
-    const todaysRows = rows.filter(row => row.get('Date') === today);
+    await sheet.addRow({
+      Token: data.token,
+      WA_Number: data.wa_id,
+      Language: data.language,
+      Service: data.service,
+      Number: data.number,
+      VehicleType: data.vehicleType || '',
+      DOB: data.dob || '',
+      Status: 'Waiting for you',
+      Date: getTodayDateString(),
+      Timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+    });
 
-    const peopleAhead = todaysRows.length;
-    const tokenNumber = peopleAhead + 1;
-    const token = `JFT-${String(tokenNumber).padStart(4, '0')}`;
-
-    return { token, peopleAhead };
+    console.log(`Order logged to sheet: ${data.token}`);
   } catch (err) {
-    console.error('Error generating token:', err.message);
-    return { token: `JFT-0001`, peopleAhead: 0 };
+    console.error('Error logging to sheet:', err.message);
   }
 }
 
-module.exports = { generateToken };
+module.exports = { logOrder, getDoc, getTodayDateString };

@@ -11,9 +11,6 @@ const serviceAccountAuth = new JWT({
 
 let cachedDoc = null;
 
-// Reuses one authenticated connection instead of reconnecting to Google on
-// every single order/token request - this was the main backend bottleneck,
-// and it gets worse as the Sheet accumulates more historical rows over time.
 async function getDoc() {
   if (!cachedDoc) {
     cachedDoc = new GoogleSpreadsheet(SHEET_ID, serviceAccountAuth);
@@ -26,4 +23,28 @@ function getTodayDateString() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
 
-module.exports = { getDoc, getTodayDateString };
+async function logOrder(data) {
+  try {
+    const doc = await getDoc();
+    const sheet = doc.sheetsByIndex[0];
+
+    await sheet.addRow({
+      Token: data.token,
+      WA_Number: data.wa_id,
+      Language: data.language,
+      Service: data.service,
+      Number: data.number,
+      VehicleType: data.vehicleType || '',
+      DOB: data.dob || '',
+      Status: 'Waiting for you',
+      Date: getTodayDateString(),
+      Timestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+    });
+
+    console.log(`Order logged to sheet: ${data.token}`);
+  } catch (err) {
+    console.error('Error logging to sheet:', err.message);
+  }
+}
+
+module.exports = { logOrder };
