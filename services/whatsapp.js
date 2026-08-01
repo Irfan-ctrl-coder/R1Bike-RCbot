@@ -18,10 +18,13 @@ const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN;
 const API_URL = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/messages`;
 const MEDIA_URL = `https://graph.facebook.com/v20.0/${PHONE_NUMBER_ID}/media`;
 
-function uploadToCloudinary(fileBuffer, resourceType = 'auto') {
+function uploadToCloudinary(fileBuffer, resourceType = 'auto', format = null) {
   return new Promise((resolve, reject) => {
+    const options = { resource_type: resourceType, folder: 'r1bikes_whatsapp' };
+    if (format) options.format = format;
+
     const uploadStream = cloudinary.uploader.upload_stream(
-      { resource_type: resourceType, folder: 'r1bikes_whatsapp' },
+      options,
       (error, result) => {
         if (error) return reject(error);
         resolve(result.secure_url);
@@ -47,9 +50,13 @@ function convertToOggOpus(inputBuffer) {
 
     ffmpeg(inputStream)
       .audioCodec('libopus')
-      .audioChannels(1)
-      .audioFrequency(16000)
+      .audioChannels(1)           // Mono (WhatsApp requirement)
+      .audioFrequency(16000)       // 16kHz (WhatsApp requirement)
       .format('ogg')
+      .outputOptions([
+        '-b:a 32k',               // High-clarity 32k bitrate (Prevents muffled audio)
+        '-application voice'       // Optimizes Opus specifically for human speech
+      ])
       .on('error', (err) => reject(err))
       .on('end', () => resolve(Buffer.concat(chunks)))
       .pipe(outputStream);
@@ -64,7 +71,7 @@ async function sendTextMessage(to, text) {
       type: 'text',
       text: { body: text }
     }, { headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } });
-    return res.data.messages[0].id; // wamid
+    return res.data.messages[0].id;
   } catch (err) {
     console.error('Error sending text message:', err.response?.data || err.message);
     throw err;

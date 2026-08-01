@@ -25,7 +25,7 @@ router.get('/admin/conversations', checkAuth, (req, res) => {
 
 router.get('/admin/messages/:wa_id', checkAuth, (req, res) => {
   const { wa_id } = req.params;
-  markRead(wa_id); // opening the chat clears its unread badge
+  markRead(wa_id);
   res.json({ messages: getMessages(wa_id) });
 });
 
@@ -68,20 +68,20 @@ router.post('/admin/send-file', checkAuth, upload.single('file'), async (req, re
     let wamid = null;
 
     if (isAudio) {
-      const originalBuffer = file.buffer; // higher-quality copy, for panel playback only
-
       let convertedBuffer = file.buffer;
       try {
-        convertedBuffer = await convertToOggOpus(file.buffer); // WhatsApp-required 16kHz mono
+        // Perform clean 32k Opus conversion
+        convertedBuffer = await convertToOggOpus(file.buffer);
       } catch (convErr) {
         console.error('FFmpeg conversion failed:', convErr.message);
       }
 
       const mediaId = await uploadMedia(convertedBuffer, 'audio/ogg; codecs=opus');
 
+      // Upload the clean converted opus audio directly to Cloudinary
       const [sendResult, cloudResult] = await Promise.allSettled([
         sendAudioMessage(to, mediaId),
-        uploadToCloudinary(originalBuffer, 'video')
+        uploadToCloudinary(convertedBuffer, 'video', 'ogg')
       ]);
 
       if (sendResult.status === 'fulfilled') {
