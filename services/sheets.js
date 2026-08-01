@@ -47,4 +47,4 @@ async function logOrder(data) {
   }
 }
 
-module.exports = { logOrder };
+module.exports = { logOrder, getDoc, getTodayDateString };
