@@ -50,12 +50,11 @@ function convertToOggOpus(inputBuffer) {
 
     ffmpeg(inputStream)
       .audioCodec('libopus')
-      .audioChannels(1)           // Mono (WhatsApp requirement)
-      .audioFrequency(16000)       // 16kHz (WhatsApp requirement)
+      .audioChannels(1)           // Mono for WhatsApp requirement
+      .audioFrequency(16000)       // 16kHz sample rate required by WhatsApp
       .format('ogg')
       .outputOptions([
-        '-b:a 32k',               // High-clarity 32k bitrate (Prevents muffled audio)
-        '-application voice'       // Optimizes Opus specifically for human speech
+        '-b:a', '32k'              // Cleanly separated bitrate flag to prevent encoder errors
       ])
       .on('error', (err) => reject(err))
       .on('end', () => resolve(Buffer.concat(chunks)))

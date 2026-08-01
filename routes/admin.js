@@ -70,7 +70,6 @@ router.post('/admin/send-file', checkAuth, upload.single('file'), async (req, re
     if (isAudio) {
       let convertedBuffer = file.buffer;
       try {
-        // Perform clean 32k Opus conversion
         convertedBuffer = await convertToOggOpus(file.buffer);
       } catch (convErr) {
         console.error('FFmpeg conversion failed:', convErr.message);
@@ -78,7 +77,6 @@ router.post('/admin/send-file', checkAuth, upload.single('file'), async (req, re
 
       const mediaId = await uploadMedia(convertedBuffer, 'audio/ogg; codecs=opus');
 
-      // Upload the clean converted opus audio directly to Cloudinary
       const [sendResult, cloudResult] = await Promise.allSettled([
         sendAudioMessage(to, mediaId),
         uploadToCloudinary(convertedBuffer, 'video', 'ogg')
