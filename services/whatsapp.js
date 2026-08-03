@@ -36,7 +36,7 @@ function uploadToCloudinary(fileBuffer, resourceType = 'auto', format = null) {
 
 // Converts browser recordings to WhatsApp-required 16kHz mono Ogg/Opus.
 // Bitrate was previously 32k with no voice-mode tuning, which produced
-// thin/broken-sounding speech. 64k + "voip" application mode fixes this.
+// thin/broken-sounding speech. 96k + "voip" application mode fixes this.
 function convertToOggOpus(inputBuffer) {
   return new Promise((resolve, reject) => {
     const inputStream = new Readable();
@@ -57,7 +57,7 @@ function convertToOggOpus(inputBuffer) {
       .audioFrequency(16000)      // 16kHz, required by WhatsApp
       .format('ogg')
       .outputOptions([
-        '-b:a', '64k',
+        '-b:a', '96k',
         '-application', 'voip'
       ])
       .on('error', (err) => reject(err))
